@@ -1,0 +1,72 @@
+{
+  "name": "hemmacafe-pos",
+  "private": true,
+  "version": "1.0.3",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nicoquesoxd-Hemma/Hemma-Cafe.git"
+  },
+  "main": "electron/main.cjs",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "electron:dev": "concurrently -k \"cross-env BROWSER=none npm run dev\" \"wait-on http://localhost:5173 && electron . --dev\"",
+    "electron:build": "npm run build && electron-builder",
+    "electron:build:ia32": "npm run build && electron-builder --win --ia32"
+  },
+  "build": {
+    "appId": "com.hemmacafe.pos",
+    "productName": "Hemma POS",
+    "directories": {
+      "output": "dist_electron",
+      "buildResources": "public"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "public/logo.png",
+        "to": "logo.png"
+      }
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "icono.ico"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "nicoquesoxd-Hemma",
+        "repo": "Hemma-Cafe"
+      }
+    ]
+  },
+  "dependencies": {
+    "date-fns": "^2.30.0",
+    "exceljs": "^4.4.0",
+    "file-saver": "^2.0.5",
+    "firebase": "^9.23.0",
+    "lucide-react": "^0.292.0",
+    "react": "^18.2.0",
+    "react-datepicker": "^4.25.0",
+    "react-dom": "^18.2.0",
+    "electron-updater": "^6.1.7",
+    "update-electron-app": "^3.1.2"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "@vitejs/plugin-react": "^4.2.0",
+    "concurrently": "^8.2.0",
+    "cross-env": "^7.0.3",
+    "electron": "^18.3.15",
+    "electron-builder": "^24.6.4",
+    "vite": "^5.0.0",
+    "vite-plugin-pwa": "^0.17.0",
+    "wait-on": "^7.2.0"
+  }
+}

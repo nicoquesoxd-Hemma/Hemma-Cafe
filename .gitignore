@@ -1,0 +1,15 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+dist_electron/
+
+# Environment and local files
+.netlify/
+.env
+.DS_Store
+Thumbs.db
+
+# Reserved Windows names (troubleshooting)
+nul
