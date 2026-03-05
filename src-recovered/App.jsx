@@ -15,13 +15,18 @@ import { useApp } from "./context/AppProvider";
 
 function App() {
     const { showToast } = useApp();
-    const [isAuthenticated, setIsAuthenticated] = useState(
-        () => localStorage.getItem("pos_authenticated") === "true"
+    const [currentMode, setCurrentMode] = useState(
+        () => localStorage.getItem("pos_mode") || "production"
     );
+    const [isAuthenticated, setIsAuthenticated] = useState(
+        () => localStorage.getItem(`pos_authenticated_${currentMode}`) === "true"
+    );
+
+    const colName = (name) => currentMode === "demo" ? `demo_${name}` : name;
     const [activeTab, setActiveTab] = useState("pos");
     const [products, setProducts] = useState([]);
     const [tables, setTables] = useState(() => {
-        const saved = localStorage.getItem("pos_tables_state");
+        const saved = localStorage.getItem(`pos_tables_state_${currentMode}`);
         if (saved) return JSON.parse(saved);
         return {
             "mostrador": [],
@@ -37,7 +42,7 @@ function App() {
     const [customers, setCustomers] = useState([]);
     const [promotions, setPromotions] = useState([]);
     const [selectedCustomerIdByTable, setSelectedCustomerIdByTable] = useState(() => {
-        const saved = localStorage.getItem("pos_customers_state");
+        const saved = localStorage.getItem(`pos_customers_state_${currentMode}`);
         if (saved) return JSON.parse(saved);
         return {
             "mostrador": "",
@@ -48,17 +53,17 @@ function App() {
         };
     });
     const [selectedVendedor, setSelectedVendedor] = useState(
-        () => localStorage.getItem("selectedVendedor") || ""
+        () => localStorage.getItem(`selectedVendedor_${currentMode}`) || ""
     );
     const [vendedores, setVendedores] = useState([]);
     const [performanceLogs, setPerformanceLogs] = useState([]);
     const [paymentMethods, setPaymentMethods] = useState([]);
     const [splitPaymentEnabled, setSplitPaymentEnabled] = useState(
-        () => localStorage.getItem("splitPaymentEnabled") === "true"
+        () => localStorage.getItem(`splitPaymentEnabled_${currentMode}`) === "true"
     );
     const handleToggleSplitPayment = (val) => {
         setSplitPaymentEnabled(val);
-        localStorage.setItem("splitPaymentEnabled", String(val));
+        localStorage.setItem(`splitPaymentEnabled_${currentMode}`, String(val));
     };
     const [historyFilter, setHistoryFilter] = useState(null);
     const [transactionToPrint, setTransactionToPrint] = useState(null);
@@ -66,7 +71,7 @@ function App() {
         return { "mostrador": "", "mesa1": "", "mesa2": "", "mesa3": "", "mesa4": "" };
     });
     const [customTotalsByTable, setCustomTotalsByTable] = useState(() => {
-        const saved = localStorage.getItem("pos_custom_totals");
+        const saved = localStorage.getItem(`pos_custom_totals_${currentMode}`);
         if (saved) return JSON.parse(saved);
         return { "mostrador": null, "mesa1": null, "mesa2": null, "mesa3": null, "mesa4": null };
     });
@@ -74,11 +79,11 @@ function App() {
 
     // Real-time data sync from Firestore
     useEffect(() => {
-        const unsubProducts = onSnapshot(collection(db, "products"), (snapshot) => {
+        const unsubProducts = onSnapshot(collection(db, colName("products")), (snapshot) => {
             setProducts(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })));
         });
         const unsubTransactions = onSnapshot(
-            query(collection(db, "transactions"), orderBy("date", "desc")),
+            query(collection(db, colName("transactions")), orderBy("date", "desc")),
             (snapshot) => {
                 setTransactions(snapshot.docs.map((d) => {
                     const data = d.data();
@@ -96,20 +101,20 @@ function App() {
                 }));
             }
         );
-        const unsubCategories = onSnapshot(collection(db, "categories"), (snapshot) => {
+        const unsubCategories = onSnapshot(collection(db, colName("categories")), (snapshot) => {
             setCategories(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })));
         });
-        const unsubCustomers = onSnapshot(collection(db, "customers"), (snapshot) => {
+        const unsubCustomers = onSnapshot(collection(db, colName("customers")), (snapshot) => {
             setCustomers(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })));
         });
-        const unsubPromotions = onSnapshot(collection(db, "promotions"), (snapshot) => {
+        const unsubPromotions = onSnapshot(collection(db, colName("promotions")), (snapshot) => {
             setPromotions(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })));
         });
-        const unsubVendedores = onSnapshot(collection(db, "vendedores"), (snapshot) => {
+        const unsubVendedores = onSnapshot(collection(db, colName("vendedores")), (snapshot) => {
             setVendedores(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })));
         });
         const unsubPerformance = onSnapshot(
-            query(collection(db, "dailyPerformance"), orderBy("date", "desc")),
+            query(collection(db, colName("dailyPerformance")), orderBy("date", "desc")),
             (snapshot) => {
                 setPerformanceLogs(snapshot.docs.map((d) => {
                     const data = d.data();
@@ -122,12 +127,12 @@ function App() {
             }
         );
         const unsubPaymentMethods = onSnapshot(
-            query(collection(db, "paymentMethods"), orderBy("order", "asc")),
+            query(collection(db, colName("paymentMethods")), orderBy("order", "asc")),
             (snapshot) => {
                 setPaymentMethods(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })));
             }
         );
-        const unsubLoans = onSnapshot(collection(db, "loans"), (snapshot) => {
+        const unsubLoans = onSnapshot(collection(db, colName("loans")), (snapshot) => {
             setLoans(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })));
         });
 
@@ -145,17 +150,17 @@ function App() {
     }, []);
 
     useEffect(() => {
-        localStorage.setItem("pos_tables_state", JSON.stringify(tables));
-    }, [tables]);
+        localStorage.setItem(`pos_tables_state_${currentMode}`, JSON.stringify(tables));
+    }, [tables, currentMode]);
 
     useEffect(() => {
-        localStorage.setItem("pos_custom_totals", JSON.stringify(customTotalsByTable));
-    }, [customTotalsByTable]);
+        localStorage.setItem(`pos_custom_totals_${currentMode}`, JSON.stringify(customTotalsByTable));
+    }, [customTotalsByTable, currentMode]);
 
     // Seed métodos de pago por defecto si la colección está vacía
     useEffect(() => {
         const seed = async () => {
-            const snap = await getDocs(collection(db, "paymentMethods"));
+            const snap = await getDocs(collection(db, colName("paymentMethods")));
             if (snap.empty) {
                 const defaults = [
                     { name: "Efectivo", emoji: "💵", order: 1 },
@@ -165,24 +170,24 @@ function App() {
                     { name: "Daviplata", emoji: "🏦", order: 5 },
                 ];
                 for (const pm of defaults) {
-                    await addDoc(collection(db, "paymentMethods"), pm);
+                    await addDoc(collection(db, colName("paymentMethods")), pm);
                 }
             }
         };
         seed();
-    }, []);
+    }, [currentMode]);
 
     useEffect(() => {
-        localStorage.setItem("pos_customers_state", JSON.stringify(selectedCustomerIdByTable));
-    }, [selectedCustomerIdByTable]);
+        localStorage.setItem(`pos_customers_state_${currentMode}`, JSON.stringify(selectedCustomerIdByTable));
+    }, [selectedCustomerIdByTable, currentMode]);
 
     useEffect(() => {
         if (selectedVendedor) {
-            localStorage.setItem("selectedVendedor", selectedVendedor);
+            localStorage.setItem(`selectedVendedor_${currentMode}`, selectedVendedor);
         } else {
-            localStorage.removeItem("selectedVendedor");
+            localStorage.removeItem(`selectedVendedor_${currentMode}`);
         }
-    }, [selectedVendedor]);
+    }, [selectedVendedor, currentMode]);
 
     const activeCart = tables[activeTable] || [];
     const activeCustomerId = selectedCustomerIdByTable[activeTable] || "";
@@ -306,7 +311,7 @@ function App() {
         const primaryMethod = paymentsArray[0]?.method || "Efectivo";
         try {
             const batch = writeBatch(db);
-            const transRef = doc(collection(db, "transactions"));
+            const transRef = doc(collection(db, colName("transactions")));
 
             const isCustomTotal = customTotalsByTable[activeTable] !== null && customTotalsByTable[activeTable] !== undefined && customTotalsByTable[activeTable] !== "";
             const finalNotes = isCustomTotal
@@ -347,7 +352,7 @@ function App() {
 
             // Update product quantities in the same batch
             activeCart.forEach(item => {
-                const prodRef = doc(db, "products", item.id);
+                const prodRef = doc(db, colName("products"), item.id);
                 const currentQty = products.find(p => p.id === item.id)?.quantity || 0;
                 batch.update(prodRef, {
                     quantity: currentQty - item.cartQuantity
@@ -405,7 +410,7 @@ function App() {
             }));
 
             if (existingLoan) {
-                const loanRef = doc(db, "loans", existingLoan.id);
+                const loanRef = doc(db, colName("loans"), existingLoan.id);
                 // Merge items: if product exists, add quantity; if not, add item
                 const mergedItems = [...(existingLoan.items || [])];
                 newItems.forEach(newItem => {
@@ -424,7 +429,7 @@ function App() {
                     notes: notes || existingLoan.notes || ""
                 });
             } else {
-                const loanRef = doc(collection(db, "loans"));
+                const loanRef = doc(collection(db, colName("loans")));
                 batch.set(loanRef, {
                     customerId,
                     customerName,
@@ -438,7 +443,7 @@ function App() {
 
             // Update product quantities (deduct from stock)
             activeCart.forEach(item => {
-                const prodRef = doc(db, "products", item.id);
+                const prodRef = doc(db, colName("products"), item.id);
                 const currentQty = products.find(p => p.id === item.id)?.quantity || 0;
                 batch.update(prodRef, {
                     quantity: currentQty - item.cartQuantity
@@ -478,10 +483,10 @@ function App() {
                 loanId: loanId,
                 notes: `Pago de productos específicos de deuda. Cliente: ${loan.customerName}`
             };
-            batch.set(doc(collection(db, "transactions")), transactionData);
+            batch.set(doc(collection(db, colName("transactions"))), transactionData);
 
             // 2. Update Loan Items
-            const loanRef = doc(db, "loans", loanId);
+            const loanRef = doc(db, colName("loans"), loanId);
             const remainingItems = [];
 
             // Map current items and subtract paid ones
@@ -531,7 +536,7 @@ function App() {
                 if (existingCat) {
                     categoryId = existingCat.id;
                 } else {
-                    const catRef = doc(collection(db, "categories"));
+                    const catRef = doc(collection(db, colName("categories")));
                     batch.set(catRef, { name: categoryName, createdAt: new Date() });
                     categoryId = catRef.id;
                     // Add to local state temporarily to avoid duplicate categories in same batch? 
@@ -549,7 +554,7 @@ function App() {
                 const wholesalePrice = item["Precio Mayorista"] ? parseFloat(item["Precio Mayorista"]) : null;
 
                 if (existingProd) {
-                    const prodRef = doc(db, "products", existingProd.id);
+                    const prodRef = doc(db, colName("products"), existingProd.id);
                     batch.update(prodRef, {
                         price,
                         quantity: qty, // Reemplazar cantidad en lugar de sumar
@@ -560,7 +565,7 @@ function App() {
                     });
                     updatedCount++;
                 } else {
-                    const prodRef = doc(collection(db, "products"));
+                    const prodRef = doc(collection(db, colName("products")));
                     batch.set(prodRef, {
                         name: productName,
                         price,
@@ -594,16 +599,16 @@ function App() {
 
     // Inventory Handlers
     const handleAddProduct = (prod) => {
-        addDoc(collection(db, "products"), prod).catch(err => console.error("Error add prod:", err));
+        addDoc(collection(db, colName("products")), prod).catch(err => console.error("Error add prod:", err));
     };
     const handleDeleteProduct = async (id) => {
         try {
             const batch = writeBatch(db);
             // Delete product
-            batch.delete(doc(db, "products", id));
+            batch.delete(doc(db, colName("products"), id));
             // Find and delete associated promotions
             promotions.filter(p => p.productId === id).forEach(p => {
-                batch.delete(doc(db, "promotions", p.id));
+                batch.delete(doc(db, colName("promotions"), p.id));
             });
             await batch.commit();
             showToast("Producto y promociones asociadas eliminados", "success");
@@ -613,26 +618,26 @@ function App() {
         }
     };
     const handleUpdateProduct = (id, updatedData) => {
-        updateDoc(doc(db, "products", id), updatedData).catch(err => console.error("Error update prod:", err));
+        updateDoc(doc(db, colName("products"), id), updatedData).catch(err => console.error("Error update prod:", err));
     };
     const handleAddCategory = (name) => {
-        addDoc(collection(db, "categories"), { name }).catch(err => console.error("Error add cat:", err));
+        addDoc(collection(db, colName("categories")), { name }).catch(err => console.error("Error add cat:", err));
     };
     const handleDeleteCategory = (id) => {
-        deleteDoc(doc(db, "categories", id)).catch(err => console.error("Error delete cat:", err));
+        deleteDoc(doc(db, colName("categories"), id)).catch(err => console.error("Error delete cat:", err));
     };
     const handleAddCustomer = (name, priceType = "special") => {
-        addDoc(collection(db, "customers"), { name, priceType }).catch(err => console.error("Error add cust:", err));
+        addDoc(collection(db, colName("customers")), { name, priceType }).catch(err => console.error("Error add cust:", err));
     };
     const handleDeleteCustomer = (id) => {
-        deleteDoc(doc(db, "customers", id)).catch(err => console.error("Error delete cust:", err));
+        deleteDoc(doc(db, colName("customers"), id)).catch(err => console.error("Error delete cust:", err));
     };
     const handleAddPromotion = (promo) => {
-        addDoc(collection(db, "promotions"), promo).catch(err => console.error("Error add promo:", err));
+        addDoc(collection(db, colName("promotions")), promo).catch(err => console.error("Error add promo:", err));
     };
     const handleDeletePromotion = async (id) => {
         try {
-            await deleteDoc(doc(db, "promotions", id));
+            await deleteDoc(doc(db, colName("promotions"), id));
             showToast("Promoción eliminada", "success");
         } catch (err) {
             console.error("Error delete promo:", err);
@@ -640,10 +645,10 @@ function App() {
         }
     };
     const handleAddVendedor = (name) => {
-        addDoc(collection(db, "vendedores"), { name }).catch(err => console.error("Error add vend:", err));
+        addDoc(collection(db, colName("vendedores")), { name }).catch(err => console.error("Error add vend:", err));
     };
     const handleDeleteVendedor = (id) => {
-        deleteDoc(doc(db, "vendedores", id)).catch(err => console.error("Error delete vend:", err));
+        deleteDoc(doc(db, colName("vendedores"), id)).catch(err => console.error("Error delete vend:", err));
     };
 
     const handleSavePerformance = async (data) => {
@@ -697,7 +702,7 @@ function App() {
                             mergedData.perMethodStats[m] = s;
                         }
                     });
-                    batch.delete(doc(db, "dailyPerformance", other.id));
+                    batch.delete(doc(db, colName("dailyPerformance"), other.id));
                 }
 
                 // Finally merge the NEW data from the form
@@ -725,7 +730,7 @@ function App() {
                 await batch.commit();
                 showToast("Cierre diario actualizado y unido", "success");
             } else {
-                await addDoc(collection(db, "dailyPerformance"), {
+                await addDoc(collection(db, colName("dailyPerformance")), {
                     ...data,
                     date: new Date()
                 });
@@ -743,17 +748,17 @@ function App() {
     };
     const handleAddPaymentMethod = ({ name, emoji }) => {
         const order = paymentMethods.length + 1;
-        addDoc(collection(db, "paymentMethods"), { name, emoji, order }).catch(err => console.error("Error add PM:", err));
+        addDoc(collection(db, colName("paymentMethods")), { name, emoji, order }).catch(err => console.error("Error add PM:", err));
     };
     const handleDeletePaymentMethod = (id) => {
-        deleteDoc(doc(db, "paymentMethods", id)).catch(err => console.error("Error delete PM:", err));
+        deleteDoc(doc(db, colName("paymentMethods"), id)).catch(err => console.error("Error delete PM:", err));
     };
 
     const handleResetTransactions = () => {
         try {
             const batch = writeBatch(db);
             transactions.forEach((t) => {
-                batch.delete(doc(db, "transactions", t.id));
+                batch.delete(doc(db, colName("transactions"), t.id));
             });
             batch.commit().catch(err => console.error("Error reset trans:", err));
             showToast("Historial de ventas eliminado", "success");
@@ -766,7 +771,7 @@ function App() {
         try {
             const batch = writeBatch(db);
             performanceLogs.forEach((log) => {
-                batch.delete(doc(db, "dailyPerformance", log.id));
+                batch.delete(doc(db, colName("dailyPerformance"), log.id));
             });
             await batch.commit();
             showToast("Historial de rendimiento eliminado", "success");
@@ -785,7 +790,7 @@ function App() {
                 { name: "Sándwich de Pollo", categoryId: categories[0]?.id || "", price: 15000, specialPrice: 13000, quantity: 12, image: "https://images.unsplash.com/photo-1521390188846-e2a3a97453a0?w=500&q=80" },
             ];
             for (const prod of demos) {
-                await addDoc(collection(db, "products"), prod);
+                await addDoc(collection(db, colName("products")), prod);
             }
             showToast("Productos de prueba creados", "success");
         } catch (err) {
@@ -796,9 +801,11 @@ function App() {
     if (!isAuthenticated) {
         return (
             <Login
-                onLogin={() => {
+                onLogin={(mode) => {
+                    setCurrentMode(mode);
                     setIsAuthenticated(true);
-                    localStorage.setItem("pos_authenticated", "true");
+                    localStorage.setItem("pos_mode", mode);
+                    localStorage.setItem(`pos_authenticated_${mode}`, "true");
                 }}
             />
         );
@@ -811,12 +818,24 @@ function App() {
                     <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                         <img src="logo.png" alt="Hemma Logo" style={{ height: '45px', objectFit: 'contain' }} />
                         <h1 style={{ margin: 0 }}>HEMMA</h1>
+                        {currentMode === "demo" && (
+                            <span style={{
+                                background: "#ff9800",
+                                color: "white",
+                                padding: "0.2rem 0.6rem",
+                                borderRadius: "4px",
+                                fontSize: "0.8rem",
+                                fontWeight: "bold"
+                            }}>
+                                MODO DEMO
+                            </span>
+                        )}
                     </div>
                     <button
                         className="logout-button"
                         onClick={() => {
                             setIsAuthenticated(false);
-                            localStorage.removeItem("pos_authenticated");
+                            localStorage.removeItem(`pos_authenticated_${currentMode}`);
                         }}
                     >
                         Cerrar Sesión

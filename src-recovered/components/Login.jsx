@@ -7,9 +7,11 @@ function Login({ onLogin }) {
 
     const handleSubmit = (e) => {
         e.preventDefault();
-        // Reconstructed credentials based on the minified code analysis
+
         if (username === "HemmaCafe" && password === "Hemmacafe2026") {
-            onLogin();
+            onLogin("production");
+        } else if (username === "HemmaDemo" && password === "Demo2026") {
+            onLogin("demo");
         } else {
             setError("Credenciales incorrectas. Por favor, intenta de nuevo.");
         }
