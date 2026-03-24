@@ -526,22 +526,25 @@ function App() {
             const batch = writeBatch(db);
             let importedCount = 0;
             let updatedCount = 0;
+            const newCategoriesMap = {}; // Track categories created in this batch
 
             for (const item of data) {
                 // Find or create category
                 let categoryId = "";
                 const categoryName = (item.Categoría || "General").trim();
-                const existingCat = categories.find(c => c.name.toLowerCase() === categoryName.toLowerCase());
-
+                const categoryNameLower = categoryName.toLowerCase();
+                
+                const existingCat = categories.find(c => c.name.toLowerCase() === categoryNameLower);
+                
                 if (existingCat) {
                     categoryId = existingCat.id;
+                } else if (newCategoriesMap[categoryNameLower]) {
+                    categoryId = newCategoriesMap[categoryNameLower];
                 } else {
                     const catRef = doc(collection(db, colName("categories")));
                     batch.set(catRef, { name: categoryName, createdAt: new Date() });
                     categoryId = catRef.id;
-                    // Add to local state temporarily to avoid duplicate categories in same batch? 
-                    // Better to just link by ID if possible, but Firestore batch won't let us read it back.
-                    // For now assume categories are mostly existing or distinct.
+                    newCategoriesMap[categoryNameLower] = categoryId;
                 }
 
                 const productName = (item.Nombre || "").trim();
