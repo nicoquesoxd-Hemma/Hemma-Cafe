@@ -428,7 +428,7 @@ function Ajustes({
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
                         <div>
                             <div style={{ fontWeight: "700", color: "#4527a0", fontSize: "1rem" }}>Estado del Sistema</div>
-                            <div style={{ fontSize: "0.85rem", color: "#666" }}>Versión actual: 1.0.6</div>
+                            <div style={{ fontSize: "0.85rem", color: "#666" }}>Versión actual: 1.0.7</div>
                         </div>
                         <button
                             onClick={handleCheckUpdates}
