@@ -17,7 +17,7 @@ const formatCurrency = (amount) => {
     }).format(amount);
 };
 
-function SalesHistory({ transactions, vendedores, initialFilters, onClearInitialFilters, onPrint }) {
+function SalesHistory({ transactions, vendedores, products, categories, initialFilters, onClearInitialFilters, onPrint, onUpdateTransaction }) {
     const [filters, setFilters] = useState({
         dateRange: [null, null],
         minPrice: "",
@@ -30,6 +30,9 @@ function SalesHistory({ transactions, vendedores, initialFilters, onClearInitial
     const [sortKey, setSortKey] = useState("date");
     const [sortDirection, setSortDirection] = useState("desc");
     const [expandedId, setExpandedId] = useState(null);
+    const [editingId, setEditingId] = useState(null);
+    const [tempItems, setTempItems] = useState([]);
+    const [searchTerm, setSearchTerm] = useState("");
 
     React.useEffect(() => {
         if (initialFilters) {
@@ -187,6 +190,20 @@ function SalesHistory({ transactions, vendedores, initialFilters, onClearInitial
         }
     };
 
+    const handleDeleteItem = (transaction, itemIndex) => {
+        const itemToRemove = transaction.items[itemIndex];
+        const confirmMsg = `¿Quitar "${itemToRemove.name}" x${itemToRemove.cartQuantity} de esta transacción?\nEl stock será devuelto al inventario automáticamente.`;
+        
+        if (window.confirm(confirmMsg)) {
+            const updatedItems = [...transaction.items];
+            updatedItems.splice(itemIndex, 1);
+            
+            const newTotal = updatedItems.reduce((acc, item) => acc + (item.subtotal || item.price * (item.cartQuantity || 1)), 0);
+            
+            onUpdateTransaction(transaction.id, updatedItems, newTotal, itemToRemove);
+        }
+    };
+
     const sortedColumnStyle = (key) => ({
         cursor: "pointer",
         userSelect: "none",
@@ -194,6 +211,67 @@ function SalesHistory({ transactions, vendedores, initialFilters, onClearInitial
         padding: "1rem 0.5rem",
     });
 
+
+    const handleStartEdit = (transaction) => {
+        setEditingId(transaction.id);
+        setTempItems([...transaction.items]);
+        setSearchTerm("");
+    };
+
+    const handleCancelEdit = () => {
+        setEditingId(null);
+        setTempItems([]);
+        setSearchTerm("");
+    };
+
+    const handleSaveEdit = (transaction) => {
+        const newTotal = tempItems.reduce((acc, item) => acc + (item.subtotal || item.price * (item.cartQuantity || 1)), 0);
+        onUpdateTransaction(transaction.id, tempItems, newTotal, transaction.items);
+        setEditingId(null);
+        setTempItems([]);
+    };
+
+    const handleUpdateTempQuantity = (index, delta) => {
+        const newItems = [...tempItems];
+        const item = { ...newItems[index] };
+        item.cartQuantity = Math.max(1, (item.cartQuantity || 1) + delta);
+        item.subtotal = item.price * item.cartQuantity;
+        newItems[index] = item;
+        setTempItems(newItems);
+    };
+
+    const handleRemoveTempItem = (index) => {
+        const newItems = [...tempItems];
+        newItems.splice(index, 1);
+        setTempItems(newItems);
+    };
+
+    const handleAddProductToTemp = (product) => {
+        const existingIndex = tempItems.findIndex(i => i.id === product.id);
+        if (existingIndex > -1) {
+            handleUpdateTempQuantity(existingIndex, 1);
+        } else {
+            // Determine price based on current transaction customer (if reachable)
+            // For simplicity, we'll try to guess or use Normal Price.
+            // Actually, we should probably check the transaction's customer type, but transactions only store customerName.
+            // Let's use item.price as default, or check if we can reconstruct the priceType.
+            setTempItems([...tempItems, {
+                id: product.id,
+                name: product.name,
+                price: product.price,
+                cartQuantity: 1,
+                subtotal: product.price
+            }]);
+        }
+        setSearchTerm("");
+    };
+
+    const filteredProductsToList = useMemo(() => {
+        if (!searchTerm) return [];
+        return products.filter(p => 
+            p.name.toLowerCase().includes(searchTerm.toLowerCase())
+        ).slice(0, 5);
+    }, [products, searchTerm]);
 
     return (
         <div style={{ display: "grid", gridTemplateColumns: "300px 1fr", gap: "2rem", alignItems: "start" }}>
@@ -449,29 +527,56 @@ function SalesHistory({ transactions, vendedores, initialFilters, onClearInitial
                                                 )}
                                             </td>
                                             <td style={{ padding: "1rem 0.5rem" }}>
-                                                <button
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        onPrint(t);
-                                                    }}
-                                                    style={{
-                                                        background: "#f0f0f0",
-                                                        border: "none",
-                                                        padding: "0.4rem 0.6rem",
-                                                        borderRadius: "6px",
-                                                        cursor: "pointer",
-                                                        fontSize: "1rem",
-                                                        display: "flex",
-                                                        alignItems: "center",
-                                                        justifyContent: "center",
-                                                        transition: "background 0.2s"
-                                                    }}
-                                                    title="Reimprimir Recibo"
-                                                    onMouseOver={(e) => e.currentTarget.style.background = "#e0e0e0"}
-                                                    onMouseOut={(e) => e.currentTarget.style.background = "#f0f0f0"}
-                                                >
-                                                    <SafeEmoji emoji="🖨️" />
-                                                </button>
+                                                <div style={{ display: "flex", gap: "0.5rem" }}>
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            onPrint(t);
+                                                        }}
+                                                        style={{
+                                                            background: "#f0f0f0",
+                                                            border: "none",
+                                                            padding: "0.4rem 0.6rem",
+                                                            borderRadius: "6px",
+                                                            cursor: "pointer",
+                                                            fontSize: "1rem",
+                                                            display: "flex",
+                                                            alignItems: "center",
+                                                            justifyContent: "center",
+                                                            transition: "background 0.2s"
+                                                        }}
+                                                        title="Reimprimir Recibo"
+                                                        onMouseOver={(e) => e.currentTarget.style.background = "#e0e0e0"}
+                                                        onMouseOut={(e) => e.currentTarget.style.background = "#f0f0f0"}
+                                                    >
+                                                        <SafeEmoji emoji="🖨️" />
+                                                    </button>
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            if (expandedId !== t.id) setExpandedId(t.id);
+                                                            handleStartEdit(t);
+                                                        }}
+                                                        style={{
+                                                            background: "#e3f2fd",
+                                                            border: "none",
+                                                            padding: "0.4rem 0.6rem",
+                                                            borderRadius: "6px",
+                                                            cursor: "pointer",
+                                                            fontSize: "1rem",
+                                                            display: "flex",
+                                                            alignItems: "center",
+                                                            justifyContent: "center",
+                                                            color: "#1976d2",
+                                                            transition: "background 0.2s"
+                                                        }}
+                                                        title="Editar Transacción"
+                                                        onMouseOver={(e) => e.currentTarget.style.background = "#bbdefb"}
+                                                        onMouseOut={(e) => e.currentTarget.style.background = "#e3f2fd"}
+                                                    >
+                                                        <SafeEmoji emoji="✏️" />
+                                                    </button>
+                                                </div>
                                             </td>
                                         </tr>
                                         {expandedId === t.id && (
@@ -485,25 +590,91 @@ function SalesHistory({ transactions, vendedores, initialFilters, onClearInitial
                                                                     <th style={{ padding: "0.5rem", textAlign: "right" }}>Precio</th>
                                                                     <th style={{ padding: "0.5rem", textAlign: "center" }}>Cant.</th>
                                                                     <th style={{ padding: "0.5rem", textAlign: "right" }}>Subtotal</th>
+                                                                    <th style={{ padding: "0.5rem", textAlign: "center", width: "80px" }}></th>
                                                                 </tr>
                                                             </thead>
                                                             <tbody>
-                                                                {(t.items || []).map((item, idx) => (
+                                                                {(editingId === t.id ? tempItems : (t.items || [])).map((item, idx) => (
                                                                     <tr key={idx} style={{ borderBottom: "1px solid #f9f9f9" }}>
                                                                         <td style={{ padding: "0.5rem" }}>{item.name}</td>
                                                                         <td style={{ padding: "0.5rem", textAlign: "right" }}>
                                                                             {formatCurrency(item.price)}
                                                                         </td>
                                                                         <td style={{ padding: "0.5rem", textAlign: "center" }}>
-                                                                            x{item.cartQuantity || 1}
+                                                                            {editingId === t.id ? (
+                                                                                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem" }}>
+                                                                                    <button onClick={() => handleUpdateTempQuantity(idx, -1)} style={{ padding: "2px 8px", borderRadius: "4px", border: "1px solid #ccc", background: "white", cursor: "pointer" }}>-</button>
+                                                                                    <span style={{ minWidth: "20px" }}>{item.cartQuantity}</span>
+                                                                                    <button onClick={() => handleUpdateTempQuantity(idx, 1)} style={{ padding: "2px 8px", borderRadius: "4px", border: "1px solid #ccc", background: "white", cursor: "pointer" }}>+</button>
+                                                                                </div>
+                                                                            ) : (
+                                                                                <>x{item.cartQuantity || 1}</>
+                                                                            )}
                                                                         </td>
                                                                         <td style={{ padding: "0.5rem", textAlign: "right", fontWeight: "600" }}>
                                                                             {formatCurrency(item.subtotal || item.price * (item.cartQuantity || 1))}
+                                                                        </td>
+                                                                        <td style={{ padding: "0.5rem", textAlign: "center" }}>
+                                                                            {editingId === t.id ? (
+                                                                                <button
+                                                                                    onClick={() => handleRemoveTempItem(idx)}
+                                                                                    style={{ background: "#ffebee", border: "none", color: "#d32f2f", padding: "0.3rem 0.5rem", borderRadius: "4px", cursor: "pointer" }}
+                                                                                >
+                                                                                    <SafeEmoji emoji="🗑️" />
+                                                                                </button>
+                                                                            ) : (
+                                                                                <button
+                                                                                    onClick={() => handleDeleteItem(t, idx)}
+                                                                                    style={{
+                                                                                        background: "none",
+                                                                                        border: "none",
+                                                                                        color: "#ff4d4d",
+                                                                                        cursor: "pointer",
+                                                                                        fontSize: "1.1rem",
+                                                                                        fontWeight: "bold",
+                                                                                        padding: "2px 5px",
+                                                                                        borderRadius: "4px"
+                                                                                    }}
+                                                                                    title="Quitar producto"
+                                                                                >×</button>
+                                                                            )}
                                                                         </td>
                                                                     </tr>
                                                                 ))}
                                                             </tbody>
                                                             <tfoot>
+                                                                {editingId === t.id && (
+                                                                    <tr>
+                                                                        <td colSpan="5" style={{ padding: "1rem 0.5rem" }}>
+                                                                            <div style={{ position: "relative" }}>
+                                                                                <input 
+                                                                                    type="text" 
+                                                                                    placeholder="🔍 Agregar producto..." 
+                                                                                    value={searchTerm}
+                                                                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                                                                    style={{ width: "100%", padding: "0.5rem", borderRadius: "8px", border: "1px solid #ddd" }}
+                                                                                />
+                                                                                {filteredProductsToList.length > 0 && (
+                                                                                    <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "white", border: "1px solid #ddd", borderRadius: "8px", zIndex: 10, boxShadow: "0 4px 12px rgba(0,0,0,0.1)", marginTop: "0.2rem" }}>
+                                                                                        {filteredProductsToList.map(p => (
+                                                                                            <div 
+                                                                                                key={p.id} 
+                                                                                                onClick={() => handleAddProductToTemp(p)}
+                                                                                                style={{ padding: "0.5rem 1rem", cursor: "pointer", borderBottom: "1px solid #eee" }}
+                                                                                                className="search-item-hover"
+                                                                                                onMouseOver={(e) => e.currentTarget.style.background = "#f5f5f5"}
+                                                                                                onMouseOut={(e) => e.currentTarget.style.background = "white"}
+                                                                                            >
+                                                                                                <div style={{ fontWeight: "600", fontSize: "0.85rem" }}>{p.name}</div>
+                                                                                                <div style={{ fontSize: "0.75rem", color: "#666" }}>{formatCurrency(p.price)}</div>
+                                                                                            </div>
+                                                                                        ))}
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
+                                                                        </td>
+                                                                    </tr>
+                                                                )}
                                                                 <tr>
                                                                     <td colSpan="3" style={{ padding: "1rem 0.5rem 0.5rem 0.5rem", textAlign: "right", fontWeight: "600" }}>
                                                                         TOTAL:
@@ -517,29 +688,50 @@ function SalesHistory({ transactions, vendedores, initialFilters, onClearInitial
                                                                             fontSize: "0.95rem",
                                                                         }}
                                                                     >
-                                                                        {formatCurrency(t.total)}
+                                                                        {editingId === t.id ? (
+                                                                            formatCurrency(tempItems.reduce((acc, i) => acc + (i.subtotal || i.price * (i.cartQuantity || 1)), 0))
+                                                                        ) : (
+                                                                            formatCurrency(t.total)
+                                                                        )}
                                                                     </td>
+                                                                    <td></td>
                                                                 </tr>
                                                             </tfoot>
                                                         </table>
-                                                        {t.notes && (
-                                                            <div style={{ marginTop: "0.8rem", padding: "0.7rem 1rem", background: "#fffde7", borderRadius: "8px", borderLeft: "3px solid #f9a825" }}>
-                                                                <span style={{ fontSize: "0.8rem", fontWeight: "700", color: "#f57f17", marginRight: "0.5rem" }}><SafeEmoji emoji="📝" /> Notas:</span>
-                                                                <span style={{ fontSize: "0.85rem", color: "#555" }}>{t.notes}</span>
+                                                        
+                                                        {editingId === t.id ? (
+                                                            <div style={{ display: "flex", justifyContent: "flex-end", gap: "1rem", marginTop: "1rem" }}>
+                                                                <button 
+                                                                    onClick={handleCancelEdit}
+                                                                    style={{ padding: "0.5rem 1rem", borderRadius: "8px", border: "1px solid #ccc", background: "white", cursor: "pointer" }}
+                                                                >Cancelar</button>
+                                                                <button 
+                                                                    onClick={() => handleSaveEdit(t)}
+                                                                    style={{ padding: "0.5rem 1.5rem", borderRadius: "8px", border: "none", background: "var(--color-primary)", color: "white", fontWeight: "bold", cursor: "pointer" }}
+                                                                >Guardar Cambios</button>
                                                             </div>
-                                                        )}
-                                                        {/* Payment breakdown for split transactions */}
-                                                        {t.payments && t.payments.length > 1 && (
-                                                            <div style={{ marginTop: "0.8rem", padding: "0.7rem 1rem", background: "#ede7f6", borderRadius: "8px", borderLeft: "3px solid #7e57c2" }}>
-                                                                <span style={{ fontSize: "0.8rem", fontWeight: "700", color: "#4527a0", marginRight: "0.6rem" }}><SafeEmoji emoji="🔀" /> Pago dividido:</span>
-                                                                <span style={{ display: "inline-flex", gap: "0.4rem", flexWrap: "wrap" }}>
-                                                                    {t.payments.map((p, i) => (
-                                                                        <span key={i} style={{ background: "white", border: "1px solid #b39ddb", borderRadius: "8px", padding: "0.2rem 0.6rem", fontSize: "0.82rem", fontWeight: "600", color: "#4527a0" }}>
-                                                                            {p.method}: {formatCurrency(p.amount)}
+                                                        ) : (
+                                                            <>
+                                                                {t.notes && (
+                                                                    <div style={{ marginTop: "0.8rem", padding: "0.7rem 1rem", background: "#fffde7", borderRadius: "8px", borderLeft: "3px solid #f9a825" }}>
+                                                                        <span style={{ fontSize: "0.8rem", fontWeight: "700", color: "#f57f17", marginRight: "0.5rem" }}><SafeEmoji emoji="📝" /> Notas:</span>
+                                                                        <span style={{ fontSize: "0.85rem", color: "#555" }}>{t.notes}</span>
+                                                                    </div>
+                                                                )}
+                                                                {/* Payment breakdown for split transactions */}
+                                                                {t.payments && t.payments.length > 1 && (
+                                                                    <div style={{ marginTop: "0.8rem", padding: "0.7rem 1rem", background: "#ede7f6", borderRadius: "8px", borderLeft: "3px solid #7e57c2" }}>
+                                                                        <span style={{ fontSize: "0.8rem", fontWeight: "700", color: "#4527a0", marginRight: "0.6rem" }}><SafeEmoji emoji="🔀" /> Pago dividido:</span>
+                                                                        <span style={{ display: "inline-flex", gap: "0.4rem", flexWrap: "wrap" }}>
+                                                                            {t.payments.map((p, i) => (
+                                                                                <span key={i} style={{ background: "white", border: "1px solid #b39ddb", borderRadius: "8px", padding: "0.2rem 0.6rem", fontSize: "0.82rem", fontWeight: "600", color: "#4527a0" }}>
+                                                                                    {p.method}: {formatCurrency(p.amount)}
+                                                                                </span>
+                                                                            ))}
                                                                         </span>
-                                                                    ))}
-                                                                </span>
-                                                            </div>
+                                                                    </div>
+                                                                )}
+                                                            </>
                                                         )}
                                                     </div>
                                                 </td>

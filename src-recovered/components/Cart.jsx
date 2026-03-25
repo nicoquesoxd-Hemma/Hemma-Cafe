@@ -133,11 +133,15 @@ function Cart({
     // ── Item subtotal helper ──────────────────────────────────────────────
     const getItemSubtotal = (item) => {
         let basePrice = item.price;
-        if (selectedCustomerId) {
+        const isFlexible = item.name?.toLowerCase() === "otro" || item.isPriceFlexible;
+
+        if (selectedCustomerId && !isFlexible) {
             if (customerPriceType === "wholesale" && item.wholesalePrice) {
                 basePrice = item.wholesalePrice;
             } else if (customerPriceType === "special" && item.specialPrice) {
                 basePrice = item.specialPrice;
+            } else if (customerPriceType === "general") {
+                basePrice = item.price;
             }
         }
         const promo = promotions.find((p) => p.productId === item.id);
@@ -186,8 +190,14 @@ function Cart({
                     ))}
                 </select>
                 {selectedCustomerId && (
-                    <div style={{ fontSize: "0.75rem", color: customerPriceType === "wholesale" ? "#4527a0" : "#E91E63", marginTop: "0.3rem", fontWeight: "600" }}>
-                        {customerPriceType === "wholesale" ? <><SafeEmoji emoji="🏦" /> Precios mayoristas aplicados</> : <><SafeEmoji emoji="⭐" /> Precios especiales aplicados</>}
+                    <div style={{ fontSize: "0.75rem", color: customerPriceType === "wholesale" ? "#4527a0" : customerPriceType === "general" ? "#757575" : "#E91E63", marginTop: "0.3rem", fontWeight: "600" }}>
+                        {customerPriceType === "wholesale" ? (
+                            <><SafeEmoji emoji="🏦" /> Precios mayoristas aplicados</>
+                        ) : customerPriceType === "general" ? (
+                            <><SafeEmoji emoji="👤" /> Precios generales aplicados</>
+                        ) : (
+                            <><SafeEmoji emoji="⭐" /> Precios especiales aplicados</>
+                        )}
                     </div>
                 )}
             </div>

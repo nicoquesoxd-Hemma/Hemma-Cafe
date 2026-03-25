@@ -160,8 +160,9 @@ function App() {
     // Seed métodos de pago por defecto si la colección está vacía
     useEffect(() => {
         const seed = async () => {
-            const snap = await getDocs(collection(db, colName("paymentMethods")));
-            if (snap.empty) {
+            // Seed payment methods
+            const pmSnap = await getDocs(collection(db, colName("paymentMethods")));
+            if (pmSnap.empty) {
                 const defaults = [
                     { name: "Efectivo", emoji: "💵", order: 1 },
                     { name: "Tarjeta", emoji: "💳", order: 2 },
@@ -173,9 +174,52 @@ function App() {
                     await addDoc(collection(db, colName("paymentMethods")), pm);
                 }
             }
+
+            // Seed "Otro" product if it doesn't exist
+            const pSnap = await getDocs(collection(db, colName("products")));
+            const hasOtro = pSnap.docs.some(d => d.data().name?.toLowerCase() === "otro");
+            if (!hasOtro) {
+                await addDoc(collection(db, colName("products")), {
+                    name: "Otro",
+                    price: 0,
+                    quantity: 999999,
+                    categoryId: categories[0]?.id || "",
+                    isPriceFlexible: true // Extra flag for robustness
+                });
+            }
         };
         seed();
-    }, [currentMode]);
+    }, [currentMode, categories]);
+
+    useEffect(() => {
+        if (paymentMethods.length > 1) {
+            const seen = new Set();
+            const toDelete = [];
+            
+            // Re-sort current state to ensure we keep the ones with earliest 'order' or first found
+            const sortedPMs = [...paymentMethods].sort((a,b) => (a.order || 0) - (b.order || 0));
+            
+            sortedPMs.forEach(pm => {
+                const name = pm.name?.toLowerCase().trim();
+                if (!name) return;
+                if (seen.has(name)) {
+                    toDelete.push(pm.id);
+                } else {
+                    seen.add(name);
+                }
+            });
+
+            if (toDelete.length > 0) {
+                const batch = writeBatch(db);
+                toDelete.forEach(id => {
+                    batch.delete(doc(db, colName("paymentMethods"), id));
+                });
+                batch.commit().then(() => {
+                    showToast("Métodos de pago duplicados eliminados", "success");
+                }).catch(err => console.error("Error deduplicating PMs:", err));
+            }
+        }
+    }, [paymentMethods, currentMode]);
 
     useEffect(() => {
         localStorage.setItem(`pos_customers_state_${currentMode}`, JSON.stringify(selectedCustomerIdByTable));
@@ -266,11 +310,15 @@ function App() {
         return activeCart.reduce((acc, item) => {
             // Resolve price based on customer type
             let basePrice = item.price;
-            if (activeCustomerId) {
+            const isFlexible = item.name?.toLowerCase() === "otro" || item.isPriceFlexible;
+            
+            if (activeCustomerId && !isFlexible) {
                 if (priceType === "wholesale" && item.wholesalePrice) {
                     basePrice = item.wholesalePrice;
                 } else if (priceType === "special" && item.specialPrice) {
                     basePrice = item.specialPrice;
+                } else if (priceType === "general") {
+                    basePrice = item.price;
                 }
             }
 
@@ -330,11 +378,15 @@ function App() {
                     const activeCustomer = customers.find(c => c.id === activeCustomerId);
                     const priceType = activeCustomer?.priceType || "special";
                     let basePrice = item.price;
-                    if (activeCustomerId) {
+                    const isFlexible = item.name?.toLowerCase() === "otro" || item.isPriceFlexible;
+
+                    if (activeCustomerId && !isFlexible) {
                         if (priceType === "wholesale" && item.wholesalePrice) {
                             basePrice = item.wholesalePrice;
                         } else if (priceType === "special" && item.specialPrice) {
                             basePrice = item.specialPrice;
+                        } else if (priceType === "general") {
+                            basePrice = item.price;
                         }
                     }
                     const promo = promotions.find(p => p.productId === item.id);
@@ -401,13 +453,28 @@ function App() {
             const existingLoan = loans.find(l => l.customerId === customerId);
             const batch = writeBatch(db);
 
-            const newItems = activeCart.map(item => ({
-                id: item.id,
-                name: item.name,
-                price: item.specialPrice || item.price,
-                cartQuantity: item.cartQuantity,
-                dateAdded: new Date().toISOString()
-            }));
+            const newItems = activeCart.map(item => {
+                const activeCustomer = customers.find(c => c.id === customerId);
+                const priceType = activeCustomer?.priceType || "special";
+                let basePrice = item.price;
+                const isFlexible = item.name?.toLowerCase() === "otro" || item.isPriceFlexible;
+
+                if (!isFlexible) {
+                    if (priceType === "wholesale" && item.wholesalePrice) {
+                        basePrice = item.wholesalePrice;
+                    } else if (priceType === "special" && item.specialPrice) {
+                        basePrice = item.specialPrice;
+                    }
+                }
+                
+                return {
+                    id: item.id,
+                    name: item.name,
+                    price: basePrice,
+                    cartQuantity: item.cartQuantity,
+                    dateAdded: new Date().toISOString()
+                };
+            });
 
             if (existingLoan) {
                 const loanRef = doc(db, colName("loans"), existingLoan.id);
@@ -750,8 +817,13 @@ function App() {
         setActiveTab("history");
     };
     const handleAddPaymentMethod = ({ name, emoji }) => {
+        const normalized = name.trim().toLowerCase();
+        if (paymentMethods.some(pm => pm.name.toLowerCase().trim() === normalized)) {
+            showToast("Este método de pago ya existe", "error");
+            return;
+        }
         const order = paymentMethods.length + 1;
-        addDoc(collection(db, colName("paymentMethods")), { name, emoji, order }).catch(err => console.error("Error add PM:", err));
+        addDoc(collection(db, colName("paymentMethods")), { name: name.trim(), emoji, order }).catch(err => console.error("Error add PM:", err));
     };
     const handleDeletePaymentMethod = (id) => {
         deleteDoc(doc(db, colName("paymentMethods"), id)).catch(err => console.error("Error delete PM:", err));
@@ -798,6 +870,67 @@ function App() {
             showToast("Productos de prueba creados", "success");
         } catch (err) {
             showToast("Error al crear productos demo", "error");
+        }
+    };
+
+    const handleUpdateTransactionHistory = async (transactionId, newItems, newTotal, originalItems) => {
+        try {
+            const batch = writeBatch(db);
+            const transRef = doc(db, colName("transactions"), transactionId);
+
+            if (newItems.length === 0) {
+                batch.delete(transRef);
+            } else {
+                const updates = {
+                    items: newItems,
+                    total: newTotal,
+                    lastUpdated: new Date()
+                };
+
+                const transaction = transactions.find(t => t.id === transactionId);
+                if (transaction) {
+                    if (transaction.payments && transaction.payments.length === 1) {
+                        updates.payments = [{ ...transaction.payments[0], amount: newTotal }];
+                        updates.paymentMethod = transaction.payments[0].method;
+                    } else if (transaction.payments && transaction.payments.length > 1) {
+                        const diff = transaction.total - newTotal;
+                        const newPayments = [...transaction.payments];
+                        newPayments[0].amount = Math.max(0, newPayments[0].amount - diff);
+                        updates.payments = newPayments;
+                    }
+                }
+
+                batch.update(transRef, updates);
+            }
+
+            // Calculate stock changes
+            const stockChanges = new Map();
+            if (originalItems) {
+                originalItems.forEach(item => {
+                    stockChanges.set(item.id, (stockChanges.get(item.id) || 0) + (item.cartQuantity || 1));
+                });
+            }
+            newItems.forEach(item => {
+                stockChanges.set(item.id, (stockChanges.get(item.id) || 0) - (item.cartQuantity || 1));
+            });
+
+            for (const [id, diff] of stockChanges) {
+                if (diff !== 0) {
+                    const prodRef = doc(db, colName("products"), id);
+                    const currentProduct = products.find(p => p.id === id);
+                    if (currentProduct) {
+                        batch.update(prodRef, {
+                            quantity: (currentProduct.quantity || 0) + diff
+                        });
+                    }
+                }
+            }
+
+            await batch.commit();
+            showToast(newItems.length === 0 ? "Transacción eliminada" : "Transacción actualizada", "success");
+        } catch (err) {
+            console.error("Error updating transaction history:", err);
+            showToast("Error al actualizar la transacción", "error");
         }
     };
 
@@ -985,9 +1118,12 @@ function App() {
                     <SalesHistory
                         transactions={transactions}
                         vendedores={vendedores}
+                        products={products}
+                        categories={categories}
                         initialFilters={historyFilter}
                         onClearInitialFilters={() => setHistoryFilter(null)}
                         onPrint={handlePrint}
+                        onUpdateTransaction={handleUpdateTransactionHistory}
                     />
                 )}
                 {activeTab === "ajustes" && (

@@ -85,8 +85,16 @@ function Ajustes({
 
     const handleAddPM = (e) => {
         e.preventDefault();
-        if (!newPMName.trim()) return;
-        onAddPaymentMethod({ name: newPMName.trim(), emoji: newPMEmoji });
+        const name = newPMName.trim();
+        if (!name) return;
+        
+        const normalized = name.toLowerCase();
+        if (paymentMethods.some(pm => pm.name.toLowerCase().trim() === normalized)) {
+            showToast("Este método de pago ya existe", "error");
+            return;
+        }
+
+        onAddPaymentMethod({ name, emoji: newPMEmoji });
         setNewPMName("");
         setNewPMEmoji("💵");
         showToast("Método de pago agregado", "success");
@@ -229,6 +237,10 @@ function Ajustes({
                             <input type="radio" name="priceType" value="wholesale" checked={newCustomerPriceType === "wholesale"} onChange={() => setNewCustomerPriceType("wholesale")} />
                             <SafeEmoji emoji="🏦" /> Mayorista
                         </label>
+                        <label style={{ display: "flex", alignItems: "center", gap: "0.3rem", cursor: "pointer", fontSize: "0.85rem", fontWeight: newCustomerPriceType === "general" ? "700" : "400" }}>
+                            <input type="radio" name="priceType" value="general" checked={newCustomerPriceType === "general"} onChange={() => setNewCustomerPriceType("general")} />
+                            <SafeEmoji emoji="👤" /> General
+                        </label>
                     </div>
                     <button type="submit" style={{ background: "#d81b60", color: "white", border: "none", padding: "0.6rem 1.2rem", borderRadius: "8px", fontWeight: "bold" }}>Agregar</button>
                 </form>
@@ -238,6 +250,8 @@ function Ajustes({
                             <span>{c.name}</span>
                             {c.priceType === "wholesale" ? (
                                 <span style={{ background: "#ede7f6", color: "#4527a0", borderRadius: "10px", padding: "0.1rem 0.5rem", fontSize: "0.72rem", fontWeight: "700" }}><SafeEmoji emoji="🏦" /> Mayorista</span>
+                            ) : c.priceType === "general" ? (
+                                <span style={{ background: "#e0e0e0", color: "#616161", borderRadius: "10px", padding: "0.1rem 0.5rem", fontSize: "0.72rem", fontWeight: "700" }}><SafeEmoji emoji="👤" /> General</span>
                             ) : (
                                 <span style={{ background: "#fce4ec", color: "#880e4f", borderRadius: "10px", padding: "0.1rem 0.5rem", fontSize: "0.72rem", fontWeight: "700" }}><SafeEmoji emoji="⭐" /> Especial</span>
                             )}

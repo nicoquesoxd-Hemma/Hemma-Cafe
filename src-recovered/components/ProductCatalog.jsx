@@ -16,6 +16,11 @@ function ProductCatalog({ products, categories, selectedCustomerId, customerPric
     const [sortBy, setSortBy] = useState("mostSold");
     const [sortOrder, setSortOrder] = useState("desc");
 
+    // Modal state for "Otro" price
+    const [isPriceModalOpen, setIsPriceModalOpen] = useState(false);
+    const [priceInput, setPriceInput] = useState("");
+    const [pendingProduct, setPendingProduct] = useState(null);
+
     const filteredProducts = useMemo(() => {
         return [...products]
             .filter((product) => {
@@ -33,6 +38,10 @@ function ProductCatalog({ products, categories, selectedCustomerId, customerPric
                     case "price":
                         valA = a.price;
                         valB = b.price;
+                        break;
+                    case "category":
+                        valA = (categories?.find((c) => c.id === a.categoryId)?.name || "").toLowerCase();
+                        valB = (categories?.find((c) => c.id === b.categoryId)?.name || "").toLowerCase();
                         break;
                     case "category":
                         valA = (categories?.find((c) => c.id === a.categoryId)?.name || "").toLowerCase();
@@ -60,6 +69,15 @@ function ProductCatalog({ products, categories, selectedCustomerId, customerPric
         setSortOrder((prev) => (prev === "asc" ? "desc" : "asc"));
     };
 
+    const handleConfirmPrice = () => {
+        if (priceInput !== "" && !isNaN(priceInput) && pendingProduct) {
+            onAddToCart({ ...pendingProduct, price: parseFloat(priceInput) });
+            setIsPriceModalOpen(false);
+            setPriceInput("");
+            setPendingProduct(null);
+        }
+    };
+
     const labelStyle = {
         display: "block",
         fontSize: "0.8rem",
@@ -78,6 +96,57 @@ function ProductCatalog({ products, categories, selectedCustomerId, customerPric
 
     return (
         <div style={{ display: "flex", gap: "1rem" }}>
+            {/* Price Modal */}
+            {isPriceModalOpen && (
+                <div style={{
+                    position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+                    background: "rgba(0,0,0,0.6)", zIndex: 1000,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    backdropFilter: "blur(4px)"
+                }}>
+                    <div className="card" style={{
+                        width: "90%", maxWidth: "400px", padding: "2rem",
+                        textAlign: "center", animation: "dialogFadeIn 0.3s ease"
+                    }}>
+                        <h2 style={{ color: "var(--color-primary)", marginBottom: "1rem" }}>Ingrese el Precio</h2>
+                        <p style={{ color: "#666", marginBottom: "1.5rem", fontSize: "0.95rem" }}>
+                            Ingresa el valor para el item "<b>{pendingProduct?.name}</b>"
+                        </p>
+                        <div style={{ position: "relative", marginBottom: "1.5rem" }}>
+                            <span style={{ position: "absolute", left: "1rem", top: "50%", transform: "translateY(-50%)", fontWeight: "bold", color: "#666" }}>$</span>
+                            <input
+                                type="number"
+                                autoFocus
+                                value={priceInput}
+                                onChange={(e) => setPriceInput(e.target.value)}
+                                onKeyDown={(e) => e.key === "Enter" && handleConfirmPrice()}
+                                placeholder="0"
+                                style={{
+                                    width: "100%", padding: "1rem 1rem 1rem 2.2rem",
+                                    borderRadius: "12px", border: "2px solid var(--color-primary)",
+                                    fontSize: "1.5rem", fontWeight: "bold", boxSizing: "border-box",
+                                    outline: "none"
+                                }}
+                            />
+                        </div>
+                        <div style={{ display: "flex", gap: "1rem" }}>
+                            <button
+                                onClick={() => setIsPriceModalOpen(false)}
+                                style={{ flex: 1, padding: "0.8rem", borderRadius: "10px", border: "1px solid #ddd", background: "#f5f5f5", fontWeight: "bold", cursor: "pointer" }}
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                onClick={handleConfirmPrice}
+                                style={{ flex: 1, padding: "0.8rem", borderRadius: "10px", border: "none", background: "var(--color-primary)", color: "white", fontWeight: "bold", cursor: "pointer" }}
+                            >
+                                Agregar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Sidebar Filters */}
             <div
                 className="card"
@@ -162,9 +231,17 @@ function ProductCatalog({ products, categories, selectedCustomerId, customerPric
 
                         return (
                             <div
+                                onClick={() => {
+                                    if (isOutOfStock) return;
+                                    if (product.name.toLowerCase() === "otro" || product.isPriceFlexible) {
+                                        setPendingProduct(product);
+                                        setIsPriceModalOpen(true);
+                                    } else {
+                                        onAddToCart(product);
+                                    }
+                                }}
                                 key={product.id}
                                 className={`product-card ${isOutOfStock ? "out-of-stock" : ""}`}
-                                onClick={() => !isOutOfStock && onAddToCart(product)}
                                 style={{
                                     display: "flex",
                                     flexDirection: "column",
