@@ -17,7 +17,7 @@ const formatCurrency = (amount) => {
     }).format(amount);
 };
 
-function SalesHistory({ transactions, vendedores, products, categories, initialFilters, onClearInitialFilters, onPrint, onUpdateTransaction }) {
+function SalesHistory({ transactions, vendedores, products, categories, initialFilters, onClearInitialFilters, onPrint, onUpdateTransaction, paymentMethods }) {
     const [filters, setFilters] = useState({
         dateRange: [new Date(), new Date()],
         minPrice: "",
@@ -32,6 +32,8 @@ function SalesHistory({ transactions, vendedores, products, categories, initialF
     const [expandedId, setExpandedId] = useState(null);
     const [editingId, setEditingId] = useState(null);
     const [tempItems, setTempItems] = useState([]);
+    const [tempPaymentMethod, setTempPaymentMethod] = useState("");
+    const [tempPayments, setTempPayments] = useState([]);
     const [searchTerm, setSearchTerm] = useState("");
 
     React.useEffect(() => {
@@ -208,20 +210,39 @@ function SalesHistory({ transactions, vendedores, products, categories, initialF
     const handleStartEdit = (transaction) => {
         setEditingId(transaction.id);
         setTempItems([...transaction.items]);
+        setTempPaymentMethod(transaction.paymentMethod || "Efectivo");
+        setTempPayments(transaction.payments ? [...transaction.payments] : [{ method: transaction.paymentMethod || "Efectivo", amount: transaction.total }]);
         setSearchTerm("");
     };
 
     const handleCancelEdit = () => {
         setEditingId(null);
         setTempItems([]);
+        setTempPaymentMethod("");
+        setTempPayments([]);
         setSearchTerm("");
     };
 
     const handleSaveEdit = (transaction) => {
         const newTotal = tempItems.reduce((acc, item) => acc + (item.subtotal || item.price * (item.cartQuantity || 1)), 0);
-        onUpdateTransaction(transaction.id, tempItems, newTotal, transaction.items);
+        
+        // Validate split payments if any
+        if (tempPayments.length > 1) {
+            const paymentsTotal = tempPayments.reduce((acc, p) => acc + (parseFloat(p.amount) || 0), 0);
+            if (Math.abs(paymentsTotal - newTotal) > 0.01) {
+                alert(`El total de los pagos ($${paymentsTotal.toLocaleString()}) debe coincidir con el total de la venta ($${newTotal.toLocaleString()})`);
+                return;
+            }
+        } else if (tempPayments.length === 1) {
+            // Update single payment amount to match new total
+            tempPayments[0].amount = newTotal;
+        }
+
+        onUpdateTransaction(transaction.id, tempItems, newTotal, transaction.items, tempPaymentMethod, tempPayments);
         setEditingId(null);
         setTempItems([]);
+        setTempPaymentMethod("");
+        setTempPayments([]);
     };
 
     const handleUpdateTempQuantity = (index, delta) => {
@@ -680,16 +701,69 @@ function SalesHistory({ transactions, vendedores, products, categories, initialF
                                                         </table>
                                                         
                                                         {editingId === t.id ? (
-                                                            <div style={{ display: "flex", justifyContent: "flex-end", gap: "1rem", marginTop: "1rem" }}>
-                                                                <button 
-                                                                    onClick={handleCancelEdit}
-                                                                    style={{ padding: "0.5rem 1rem", borderRadius: "8px", border: "1px solid #ccc", background: "white", cursor: "pointer" }}
-                                                                >Cancelar</button>
-                                                                <button 
-                                                                    onClick={() => handleSaveEdit(t)}
-                                                                    style={{ padding: "0.5rem 1.5rem", borderRadius: "8px", border: "none", background: "var(--color-primary)", color: "white", fontWeight: "bold", cursor: "pointer" }}
-                                                                >Guardar Cambios</button>
-                                                            </div>
+                                                            <>
+                                                                <div style={{ marginTop: "1rem", padding: "0.8rem", background: "#f0f4ff", borderRadius: "8px", border: "1px solid #d0dfff" }}>
+                                                                    <div style={{ fontSize: "0.8rem", fontWeight: "700", marginBottom: "0.6rem", color: "#1565c0", display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                                                                        <SafeEmoji emoji="💳" /> Editar Pago
+                                                                    </div>
+                                                                    {tempPayments.length > 1 ? (
+                                                                        <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
+                                                                            {tempPayments.map((pm, idx) => (
+                                                                                <div key={idx} style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+                                                                                    <select
+                                                                                        value={pm.method}
+                                                                                        onChange={(e) => {
+                                                                                            const newP = [...tempPayments];
+                                                                                            newP[idx].method = e.target.value;
+                                                                                            setTempPayments(newP);
+                                                                                            if (idx === 0) setTempPaymentMethod(e.target.value);
+                                                                                        }}
+                                                                                        style={{ flex: 1, padding: "0.4rem", borderRadius: "6px", border: "1px solid #c0d0ff", fontSize: "0.8rem" }}
+                                                                                    >
+                                                                                        {paymentMethods.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
+                                                                                    </select>
+                                                                                    <input
+                                                                                        type="number"
+                                                                                        value={pm.amount}
+                                                                                        onChange={(e) => {
+                                                                                            const newP = [...tempPayments];
+                                                                                            newP[idx].amount = parseFloat(e.target.value) || 0;
+                                                                                            setTempPayments(newP);
+                                                                                        }}
+                                                                                        style={{ width: "110px", padding: "0.4rem", borderRadius: "6px", border: "1px solid #c0d0ff", textAlign: "right", fontSize: "0.8rem" }}
+                                                                                    />
+                                                                                </div>
+                                                                            ))}
+                                                                            <div style={{ fontSize: "0.75rem", textAlign: "right", color: "#666", marginTop: "0.2rem" }}>
+                                                                                Total pagos: {formatCurrency(tempPayments.reduce((acc, p) => acc + (parseFloat(p.amount) || 0), 0))}
+                                                                            </div>
+                                                                        </div>
+                                                                    ) : (
+                                                                        <select
+                                                                            value={tempPaymentMethod}
+                                                                            onChange={(e) => {
+                                                                                setTempPaymentMethod(e.target.value);
+                                                                                const newP = [...tempPayments];
+                                                                                newP[0].method = e.target.value;
+                                                                                setTempPayments(newP);
+                                                                            }}
+                                                                            style={{ width: "100%", padding: "0.5rem", borderRadius: "8px", border: "1px solid #c0d0ff", fontSize: "0.85rem" }}
+                                                                        >
+                                                                            {paymentMethods.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
+                                                                        </select>
+                                                                    )}
+                                                                </div>
+                                                                <div style={{ display: "flex", justifyContent: "flex-end", gap: "1rem", marginTop: "1.2rem" }}>
+                                                                    <button 
+                                                                        onClick={handleCancelEdit}
+                                                                        style={{ padding: "0.5rem 1rem", borderRadius: "8px", border: "1px solid #ccc", background: "white", cursor: "pointer", fontSize: "0.85rem" }}
+                                                                    >Cancelar</button>
+                                                                    <button 
+                                                                        onClick={() => handleSaveEdit(t)}
+                                                                        style={{ padding: "0.5rem 1.5rem", borderRadius: "8px", border: "none", background: "var(--color-primary)", color: "white", fontWeight: "bold", cursor: "pointer", fontSize: "0.85rem" }}
+                                                                    >Guardar Cambios</button>
+                                                                </div>
+                                                            </>
                                                         ) : (
                                                             <>
                                                                 {/* Payment breakdown for split transactions */}

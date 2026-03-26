@@ -873,7 +873,7 @@ function App() {
         }
     };
 
-    const handleUpdateTransactionHistory = async (transactionId, newItems, newTotal, originalItems) => {
+    const handleUpdateTransactionHistory = async (transactionId, newItems, newTotal, originalItems, newPaymentMethod, newPayments) => {
         try {
             const batch = writeBatch(db);
             const transRef = doc(db, colName("transactions"), transactionId);
@@ -887,16 +887,28 @@ function App() {
                     lastUpdated: new Date()
                 };
 
-                const transaction = transactions.find(t => t.id === transactionId);
-                if (transaction) {
-                    if (transaction.payments && transaction.payments.length === 1) {
-                        updates.payments = [{ ...transaction.payments[0], amount: newTotal }];
-                        updates.paymentMethod = transaction.payments[0].method;
-                    } else if (transaction.payments && transaction.payments.length > 1) {
-                        const diff = transaction.total - newTotal;
-                        const newPayments = [...transaction.payments];
-                        newPayments[0].amount = Math.max(0, newPayments[0].amount - diff);
-                        updates.payments = newPayments;
+                // Use new payment data if provided, otherwise update according to total change
+                if (newPaymentMethod) {
+                    updates.paymentMethod = newPaymentMethod;
+                }
+                if (newPayments) {
+                    updates.payments = newPayments;
+                }
+
+                if (!newPaymentMethod || !newPayments) {
+                    const transaction = transactions.find(t => t.id === transactionId);
+                    if (transaction) {
+                        if (!newPayments) {
+                            if (transaction.payments && transaction.payments.length === 1) {
+                                updates.payments = [{ ...transaction.payments[0], amount: newTotal }];
+                                if (!newPaymentMethod) updates.paymentMethod = transaction.payments[0].method;
+                            } else if (transaction.payments && transaction.payments.length > 1) {
+                                const diff = transaction.total - newTotal;
+                                const currentPayments = [...transaction.payments];
+                                currentPayments[0].amount = Math.max(0, currentPayments[0].amount - diff);
+                                updates.payments = currentPayments;
+                            }
+                        }
                     }
                 }
 
@@ -1125,6 +1137,7 @@ function App() {
                         onClearInitialFilters={() => setHistoryFilter(null)}
                         onPrint={handlePrint}
                         onUpdateTransaction={handleUpdateTransactionHistory}
+                        paymentMethods={paymentMethods}
                     />
                 )}
                 {activeTab === "ajustes" && (
