@@ -19,7 +19,7 @@ const formatCurrency = (amount) => {
 
 function SalesHistory({ transactions, vendedores, products, categories, initialFilters, onClearInitialFilters, onPrint, onUpdateTransaction }) {
     const [filters, setFilters] = useState({
-        dateRange: [null, null],
+        dateRange: [new Date(), new Date()],
         minPrice: "",
         maxPrice: "",
         productName: "",
@@ -136,6 +136,7 @@ function SalesHistory({ transactions, vendedores, products, categories, initialF
             { header: "Vendedor", key: "vendedor", width: 18 },
             { header: "Cliente", key: "cliente", width: 18 },
             { header: "Producto", key: "producto", width: 25 },
+            { header: "Categoría", key: "categoria", width: 20 },
             { header: "Precio Unit.", key: "precioUnit", width: 15 },
             { header: "Cantidad", key: "cantidad", width: 10 },
             { header: "Subtotal", key: "subtotal", width: 15 },
@@ -156,12 +157,16 @@ function SalesHistory({ transactions, vendedores, products, categories, initialF
 
         filteredTransactions.forEach((t) => {
             t.items.forEach((item, idx) => {
+                const product = products.find(p => p.id === item.id) || products.find(p => p.name === item.name);
+                const categoryName = categories.find(c => c.id === product?.categoryId)?.name || "Sin Categoría";
+
                 sheet.addRow({
                     fecha: new Date(t.date).toLocaleDateString(),
                     hora: new Date(t.date).toLocaleTimeString(),
                     vendedor: t.vendedorName || "N/A",
                     cliente: t.customerName || "General",
                     producto: item.name,
+                    categoria: categoryName,
                     precioUnit: item.price,
                     cantidad: item.cartQuantity || 1,
                     subtotal: item.subtotal || item.price * (item.cartQuantity || 1),
@@ -173,7 +178,7 @@ function SalesHistory({ transactions, vendedores, products, categories, initialF
         });
 
         // Currency formatting
-        ["F", "H", "I"].forEach((col) => {
+        ["G", "I", "J"].forEach((col) => {
             sheet.getColumn(col).numFmt = '"$"#,##0';
         });
 
@@ -190,19 +195,7 @@ function SalesHistory({ transactions, vendedores, products, categories, initialF
         }
     };
 
-    const handleDeleteItem = (transaction, itemIndex) => {
-        const itemToRemove = transaction.items[itemIndex];
-        const confirmMsg = `¿Quitar "${itemToRemove.name}" x${itemToRemove.cartQuantity} de esta transacción?\nEl stock será devuelto al inventario automáticamente.`;
-        
-        if (window.confirm(confirmMsg)) {
-            const updatedItems = [...transaction.items];
-            updatedItems.splice(itemIndex, 1);
-            
-            const newTotal = updatedItems.reduce((acc, item) => acc + (item.subtotal || item.price * (item.cartQuantity || 1)), 0);
-            
-            onUpdateTransaction(transaction.id, updatedItems, newTotal, itemToRemove);
-        }
-    };
+
 
     const sortedColumnStyle = (key) => ({
         cursor: "pointer",
@@ -384,7 +377,7 @@ function SalesHistory({ transactions, vendedores, products, categories, initialF
                                     productName: "",
                                     vendedorName: "",
                                     paymentMethod: "",
-                                    dateRange: [null, null],
+                                    dateRange: [new Date(), new Date()],
                                     hasNotes: false,
                                 })
                             }
@@ -419,7 +412,7 @@ function SalesHistory({ transactions, vendedores, products, categories, initialF
                     </div>
                 ) : (
                     <div style={{ overflowX: "auto" }}>
-                        <table className="history-table" style={{ width: "100%", borderCollapse: "collapse" }}>
+                        <table className="history-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.85rem" }}>
                             <thead>
                                 <tr style={{ textAlign: "left", borderBottom: "2px solid #eee" }}>
                                     <th style={{ padding: "1rem 0.5rem", width: "40px" }}></th>
@@ -432,7 +425,7 @@ function SalesHistory({ transactions, vendedores, products, categories, initialF
                                     <th style={sortedColumnStyle("customer")} onClick={() => handleSort("customer")}>
                                         Cliente {sortKey === "customer" ? (sortDirection === "asc" ? " ↑" : " ↓") : ""}
                                     </th>
-                                    <th style={sortedColumnStyle("items")} onClick={() => handleSort("items")}>
+                                    <th style={{ ...sortedColumnStyle("items"), textAlign: "center" }} onClick={() => handleSort("items")}>
                                         Cant. {sortKey === "items" ? (sortDirection === "asc" ? " ↑" : " ↓") : ""}
                                     </th>
                                     <th style={sortedColumnStyle("total")} onClick={() => handleSort("total")}>
@@ -485,7 +478,7 @@ function SalesHistory({ transactions, vendedores, products, categories, initialF
                                                 </span>
                                             </td>
                                             <td style={{ padding: "1rem 0.5rem" }}>{t.customerName || "General"}</td>
-                                            <td style={{ padding: "1rem 0.5rem" }}>
+                                            <td style={{ padding: "1rem 0.5rem", textAlign: "center" }}>
                                                 {(t.items || []).reduce((acc, item) => acc + (item.cartQuantity || 1), 0)}
                                             </td>
                                             <td style={{ padding: "1rem 0.5rem", fontWeight: "bold" }}>{formatCurrency(t.total)}</td>
@@ -536,10 +529,11 @@ function SalesHistory({ transactions, vendedores, products, categories, initialF
                                                         style={{
                                                             background: "#f0f0f0",
                                                             border: "none",
-                                                            padding: "0.4rem 0.6rem",
+                                                            padding: "0.4rem 0.8rem",
                                                             borderRadius: "6px",
                                                             cursor: "pointer",
-                                                            fontSize: "1rem",
+                                                            fontSize: "0.85rem",
+                                                            fontWeight: "600",
                                                             display: "flex",
                                                             alignItems: "center",
                                                             justifyContent: "center",
@@ -549,7 +543,7 @@ function SalesHistory({ transactions, vendedores, products, categories, initialF
                                                         onMouseOver={(e) => e.currentTarget.style.background = "#e0e0e0"}
                                                         onMouseOut={(e) => e.currentTarget.style.background = "#f0f0f0"}
                                                     >
-                                                        <SafeEmoji emoji="🖨️" />
+                                                        Imprimir
                                                     </button>
                                                     <button
                                                         onClick={(e) => {
@@ -560,10 +554,11 @@ function SalesHistory({ transactions, vendedores, products, categories, initialF
                                                         style={{
                                                             background: "#e3f2fd",
                                                             border: "none",
-                                                            padding: "0.4rem 0.6rem",
+                                                            padding: "0.4rem 0.8rem",
                                                             borderRadius: "6px",
                                                             cursor: "pointer",
-                                                            fontSize: "1rem",
+                                                            fontSize: "0.85rem",
+                                                            fontWeight: "600",
                                                             display: "flex",
                                                             alignItems: "center",
                                                             justifyContent: "center",
@@ -574,7 +569,7 @@ function SalesHistory({ transactions, vendedores, products, categories, initialF
                                                         onMouseOver={(e) => e.currentTarget.style.background = "#bbdefb"}
                                                         onMouseOut={(e) => e.currentTarget.style.background = "#e3f2fd"}
                                                     >
-                                                        <SafeEmoji emoji="✏️" />
+                                                        Editar
                                                     </button>
                                                 </div>
                                             </td>
@@ -583,7 +578,7 @@ function SalesHistory({ transactions, vendedores, products, categories, initialF
                                             <tr>
                                                 <td colSpan="7" style={{ padding: "0", backgroundColor: "#fafafa" }}>
                                                     <div style={{ padding: "1rem 1.5rem", borderBottom: "1px solid #e0e0e0" }}>
-                                                        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.85rem" }}>
+                                                        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.8rem" }}>
                                                             <thead>
                                                                 <tr style={{ color: "#666", borderBottom: "1px solid #eee" }}>
                                                                     <th style={{ padding: "0.5rem", textAlign: "left" }}>Producto</th>
@@ -615,28 +610,13 @@ function SalesHistory({ transactions, vendedores, products, categories, initialF
                                                                             {formatCurrency(item.subtotal || item.price * (item.cartQuantity || 1))}
                                                                         </td>
                                                                         <td style={{ padding: "0.5rem", textAlign: "center" }}>
-                                                                            {editingId === t.id ? (
+                                                                            {editingId === t.id && (
                                                                                 <button
                                                                                     onClick={() => handleRemoveTempItem(idx)}
                                                                                     style={{ background: "#ffebee", border: "none", color: "#d32f2f", padding: "0.3rem 0.5rem", borderRadius: "4px", cursor: "pointer" }}
                                                                                 >
                                                                                     <SafeEmoji emoji="🗑️" />
                                                                                 </button>
-                                                                            ) : (
-                                                                                <button
-                                                                                    onClick={() => handleDeleteItem(t, idx)}
-                                                                                    style={{
-                                                                                        background: "none",
-                                                                                        border: "none",
-                                                                                        color: "#ff4d4d",
-                                                                                        cursor: "pointer",
-                                                                                        fontSize: "1.1rem",
-                                                                                        fontWeight: "bold",
-                                                                                        padding: "2px 5px",
-                                                                                        borderRadius: "4px"
-                                                                                    }}
-                                                                                    title="Quitar producto"
-                                                                                >×</button>
                                                                             )}
                                                                         </td>
                                                                     </tr>
@@ -712,12 +692,6 @@ function SalesHistory({ transactions, vendedores, products, categories, initialF
                                                             </div>
                                                         ) : (
                                                             <>
-                                                                {t.notes && (
-                                                                    <div style={{ marginTop: "0.8rem", padding: "0.7rem 1rem", background: "#fffde7", borderRadius: "8px", borderLeft: "3px solid #f9a825" }}>
-                                                                        <span style={{ fontSize: "0.8rem", fontWeight: "700", color: "#f57f17", marginRight: "0.5rem" }}><SafeEmoji emoji="📝" /> Notas:</span>
-                                                                        <span style={{ fontSize: "0.85rem", color: "#555" }}>{t.notes}</span>
-                                                                    </div>
-                                                                )}
                                                                 {/* Payment breakdown for split transactions */}
                                                                 {t.payments && t.payments.length > 1 && (
                                                                     <div style={{ marginTop: "0.8rem", padding: "0.7rem 1rem", background: "#ede7f6", borderRadius: "8px", borderLeft: "3px solid #7e57c2" }}>
@@ -729,6 +703,12 @@ function SalesHistory({ transactions, vendedores, products, categories, initialF
                                                                                 </span>
                                                                             ))}
                                                                         </span>
+                                                                    </div>
+                                                                )}
+                                                                {t.notes && (
+                                                                    <div style={{ marginTop: "0.8rem", padding: "0.7rem 1rem", background: "#fffde7", borderRadius: "8px", borderLeft: "3px solid #f9a825" }}>
+                                                                        <span style={{ fontSize: "0.8rem", fontWeight: "700", color: "#f57f17", marginRight: "0.5rem" }}><SafeEmoji emoji="📝" /> Notas:</span>
+                                                                        <span style={{ fontSize: "0.85rem", color: "#555" }}>{t.notes}</span>
                                                                     </div>
                                                                 )}
                                                             </>

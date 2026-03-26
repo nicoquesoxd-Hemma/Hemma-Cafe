@@ -4,8 +4,11 @@ import ExcelJS from "exceljs/dist/exceljs.min.js";
 import { saveAs } from "file-saver";
 import { useApp } from "../context/AppProvider";
 
-function CollapsibleCard({ title, color, defaultOpen = true, children, extraAction }) {
-    const [isOpen, setIsOpen] = useState(defaultOpen);
+function CollapsibleCard({ title, color, isOpen: controlledIsOpen, onToggle, defaultOpen = true, children, extraAction }) {
+    const [internalIsOpen, setInternalIsOpen] = useState(defaultOpen);
+    const isOpen = controlledIsOpen !== undefined ? controlledIsOpen : internalIsOpen;
+    const toggle = onToggle || (() => setInternalIsOpen(!internalIsOpen));
+
     return (
         <div className="card" style={{ borderLeft: `5px solid ${color}` }}>
             <div
@@ -17,7 +20,7 @@ function CollapsibleCard({ title, color, defaultOpen = true, children, extraActi
                     userSelect: "none",
                 }}
             >
-                <div onClick={() => setIsOpen(!isOpen)} style={{ display: "flex", alignItems: "center", gap: "1rem", flex: 1 }}>
+                <div onClick={toggle} style={{ display: "flex", alignItems: "center", gap: "1rem", flex: 1 }}>
                     <h2 style={{ color, margin: 0 }}>{title}</h2>
                     <span
                         style={{
@@ -74,6 +77,7 @@ function Inventory({
     const [categoryFilter, setCategoryFilter] = useState("");
     const [sortConfig, setSortConfig] = useState({ key: "name", direction: "asc" });
     const [expandedSections, setExpandedSections] = useState({
+        products: true,
         addProduct: true,
         categories: false,
         promotions: false,
@@ -236,6 +240,7 @@ function Inventory({
         if (isEditingId) {
             onUpdateProduct(isEditingId, productData);
             setIsEditingId(null);
+            setExpandedSections(prev => ({ ...prev, products: true }));
             showToast("Producto actualizado", "success");
         } else {
             onAddProduct(productData);
@@ -256,13 +261,14 @@ function Inventory({
             categoryId: p.categoryId,
             image: p.image || ""
         });
-        setExpandedSections(prev => ({ ...prev, addProduct: true }));
+        setExpandedSections(prev => ({ ...prev, addProduct: true, products: false }));
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
     const handleCancelEdit = () => {
         setIsEditingId(null);
         setNewProduct({ name: "", price: "", specialPrice: "", wholesalePrice: "", quantity: "", categoryId: "", image: "" });
+        setExpandedSections(prev => ({ ...prev, products: true }));
     };
 
     const handleUpdatePrice = (id, newPrice) => {
@@ -320,6 +326,8 @@ function Inventory({
             <CollapsibleCard
                 title={<><SafeEmoji emoji="📦" /> Productos</>}
                 color="var(--color-primary)"
+                isOpen={expandedSections.products}
+                onToggle={() => toggleSection('products')}
                 extraAction={
                     <div style={{ display: "flex", gap: "0.5rem" }}>
                         <input

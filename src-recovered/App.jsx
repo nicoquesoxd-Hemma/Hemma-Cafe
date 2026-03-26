@@ -1077,6 +1077,7 @@ function App() {
                                 paymentMethods={paymentMethods}
                                 onSaveLoan={handleSaveLoan}
                                 splitPaymentEnabled={splitPaymentEnabled}
+                                onToggleSplitPayment={handleToggleSplitPayment}
                             />
                         </div>
                     </div>

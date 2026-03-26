@@ -183,38 +183,6 @@ function Ajustes({
                     Estos métodos aparecerán en el selector de pago de la orden actual.
                 </p>
 
-                {/* Split payment toggle */}
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "1rem", padding: "0.8rem", background: splitPaymentEnabled ? "#e0f7fa" : "#f5f5f5", borderRadius: "10px", border: `1px solid ${splitPaymentEnabled ? "#0097a7" : "#ddd"}`, transition: "background 0.3s" }}>
-                    <div>
-                        <div style={{ fontWeight: "700", color: splitPaymentEnabled ? "#006064" : "#555", fontSize: "0.95rem" }}><SafeEmoji emoji="🔀" /> Pago dividido</div>
-                        <div style={{ fontSize: "0.75rem", color: "#888", marginTop: "0.2rem" }}>Permite usar varios métodos en un solo pedido</div>
-                    </div>
-                    {/* Toggle switch */}
-                    <label style={{ position: "relative", display: "inline-block", width: "46px", height: "26px", cursor: "pointer", flexShrink: 0 }}>
-                        <input
-                            type="checkbox"
-                            checked={!!splitPaymentEnabled}
-                            onChange={(e) => onToggleSplitPayment(e.target.checked)}
-                            style={{ opacity: 0, width: 0, height: 0 }}
-                        />
-                        <span style={{
-                            position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
-                            background: splitPaymentEnabled ? "#0097a7" : "#ccc",
-                            borderRadius: "26px",
-                            transition: "background 0.3s"
-                        }} />
-                        <span style={{
-                            position: "absolute",
-                            height: "20px", width: "20px",
-                            left: splitPaymentEnabled ? "23px" : "3px",
-                            bottom: "3px",
-                            background: "white",
-                            borderRadius: "50%",
-                            transition: "left 0.3s",
-                            boxShadow: "0 1px 3px rgba(0,0,0,0.3)"
-                        }} />
-                    </label>
-                </div>
             </Section>
 
             {/* Clientes */}
@@ -442,7 +410,7 @@ function Ajustes({
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
                         <div>
                             <div style={{ fontWeight: "700", color: "#4527a0", fontSize: "1rem" }}>Estado del Sistema</div>
-                            <div style={{ fontSize: "0.85rem", color: "#666" }}>Versión actual: 1.0.7</div>
+                            <div style={{ fontSize: "0.85rem", color: "#666" }}>Versión actual: 1.0.9</div>
                         </div>
                         <button
                             onClick={handleCheckUpdates}

@@ -41,6 +41,7 @@ function Cart({
     paymentMethods,
     onSaveLoan,
     splitPaymentEnabled,
+    onToggleSplitPayment,
 }) {
     // ── Single-payment state ──────────────────────────────────────────────
     const [paymentAmount, setPaymentAmount] = useState("");
@@ -242,6 +243,50 @@ function Cart({
 
                     {/* Payment Section */}
                     <div style={{ marginTop: "1rem", borderTop: "2px solid var(--color-primary)", paddingTop: "1rem" }}>
+
+                        {/* Split Payment Toggle */}
+                        <div style={{ 
+                            display: "flex", 
+                            justifyContent: "space-between", 
+                            alignItems: "center", 
+                            marginBottom: "1rem", 
+                            padding: "0.6rem 0.8rem", 
+                            background: splitPaymentEnabled ? "#e0f7fa" : "#f5f5f5", 
+                            borderRadius: "10px", 
+                            border: `1px solid ${splitPaymentEnabled ? "#0097a7" : "#ddd"}`, 
+                            transition: "background 0.3s" 
+                        }}>
+                            <div>
+                                <div style={{ fontWeight: "700", color: splitPaymentEnabled ? "#006064" : "#555", fontSize: "0.85rem" }}>
+                                    <SafeEmoji emoji="🔀" /> Pago dividido
+                                </div>
+                            </div>
+                            <label style={{ position: "relative", display: "inline-block", width: "40px", height: "22px", cursor: "pointer", flexShrink: 0 }}>
+                                <input
+                                    type="checkbox"
+                                    checked={!!splitPaymentEnabled}
+                                    onChange={(e) => onToggleSplitPayment(e.target.checked)}
+                                    style={{ opacity: 0, width: 0, height: 0 }}
+                                />
+                                <span style={{
+                                    position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
+                                    background: splitPaymentEnabled ? "#0097a7" : "#ccc",
+                                    borderRadius: "22px",
+                                    transition: "background 0.3s"
+                                }} />
+                                <span style={{
+                                    position: "absolute",
+                                    height: "16px", width: "16px",
+                                    left: splitPaymentEnabled ? "21px" : "3px",
+                                    bottom: "3px",
+                                    background: "white",
+                                    borderRadius: "50%",
+                                    transition: "left 0.3s",
+                                    boxShadow: "0 1px 2px rgba(0,0,0,0.3)"
+                                }} />
+                            </label>
+                        </div>
+
 
                         {/* Total */}
                         <div style={{ display: "flex", justifyContent: "space-between", fontWeight: "bold", fontSize: "1.4rem", color: "var(--color-primary)" }}>
