@@ -633,11 +633,12 @@ function SalesHistory({ transactions, vendedores, products, categories, initialF
                                                                         <td style={{ padding: "0.5rem", textAlign: "center" }}>
                                                                             {editingId === t.id && (
                                                                                 <button
-                                                                                    onClick={() => handleRemoveTempItem(idx)}
-                                                                                    style={{ background: "#ffebee", border: "none", color: "#d32f2f", padding: "0.3rem 0.5rem", borderRadius: "4px", cursor: "pointer" }}
-                                                                                >
-                                                                                    <SafeEmoji emoji="🗑️" />
-                                                                                </button>
+                                                                                     onClick={() => handleRemoveTempItem(idx)}
+                                                                                     style={{ background: "#ffebee", border: "none", color: "#d32f2f", padding: "0.3rem 0.6rem", borderRadius: "4px", cursor: "pointer", fontSize: "0.9rem", fontWeight: "bold", display: "flex", alignItems: "center", justifyContent: "center" }}
+                                                                                     title="Quitar producto"
+                                                                                 >
+                                                                                     ✕
+                                                                                 </button>
                                                                             )}
                                                                         </td>
                                                                     </tr>
@@ -758,6 +759,15 @@ function SalesHistory({ transactions, vendedores, products, categories, initialF
                                                                         onClick={handleCancelEdit}
                                                                         style={{ padding: "0.5rem 1rem", borderRadius: "8px", border: "1px solid #ccc", background: "white", cursor: "pointer", fontSize: "0.85rem" }}
                                                                     >Cancelar</button>
+                                                                    <button 
+                                                                        onClick={() => {
+                                                                            if (window.confirm("¿Seguro que deseas eliminar esta transacción por completo? Esta acción no se puede deshacer.")) {
+                                                                                onUpdateTransaction(t.id, [], 0, t.items);
+                                                                                setEditingId(null);
+                                                                            }
+                                                                        }}
+                                                                        style={{ padding: "0.5rem 1rem", borderRadius: "8px", border: "none", background: "#fef2f2", color: "#dc2626", fontWeight: "600", cursor: "pointer", fontSize: "0.85rem", border: "1px solid #fecaca" }}
+                                                                    >Eliminar Venta</button>
                                                                     <button 
                                                                         onClick={() => handleSaveEdit(t)}
                                                                         style={{ padding: "0.5rem 1.5rem", borderRadius: "8px", border: "none", background: "var(--color-primary)", color: "white", fontWeight: "bold", cursor: "pointer", fontSize: "0.85rem" }}
