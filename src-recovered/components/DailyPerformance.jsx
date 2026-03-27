@@ -17,7 +17,7 @@ const formatCurrency = (amount) => {
     }).format(amount);
 };
 
-function DailyPerformance({ transactions, logs, onSave, onViewDetails, paymentMethods }) {
+function DailyPerformance({ transactions, logs, onSave, onViewDetails, onDeleteLog, paymentMethods }) {
     const [realAmounts, setRealAmounts] = useState({});
     const [notes, setNotes] = useState("");
     const [diffMethod, setDiffMethod] = useState("Efectivo"); // Se mantiene para compatibilidad o nota principal
@@ -438,9 +438,19 @@ function DailyPerformance({ transactions, logs, onSave, onViewDetails, paymentMe
                                             <td style={{ padding: "1rem" }}>
                                                 <button
                                                     onClick={() => onViewDetails(log.date)}
-                                                    style={{ background: "#f0f0f0", border: "none", padding: "0.4rem 0.8rem", borderRadius: "6px", cursor: "pointer", fontSize: "0.8rem" }}
+                                                    style={{ background: "#f0f0f0", border: "none", padding: "0.4rem 0.8rem", borderRadius: "6px", cursor: "pointer", fontSize: "0.8rem", marginRight: "0.5rem" }}
                                                 >
                                                     Ver Ventas
+                                                </button>
+                                                <button
+                                                    onClick={() => {
+                                                        if (window.confirm("¿Estás seguro de que deseas eliminar este cierre de caja? Esta acción no se puede deshacer.")) {
+                                                            onDeleteLog(log.id);
+                                                        }
+                                                    }}
+                                                    style={{ background: "#ffebee", color: "#c62828", border: "none", padding: "0.4rem 0.8rem", borderRadius: "6px", cursor: "pointer", fontSize: "0.8rem" }}
+                                                >
+                                                    Eliminar
                                                 </button>
                                             </td>
                                         </tr>

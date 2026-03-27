@@ -812,6 +812,16 @@ function App() {
         }
     };
 
+    const handleDeletePerformanceLog = async (id) => {
+        try {
+            await deleteDoc(doc(db, colName("dailyPerformance"), id));
+            showToast("Cierre de caja eliminado correctamente", "success");
+        } catch (err) {
+            console.error("Error deleting performance log:", err);
+            showToast("Error al eliminar el cierre de caja", "error");
+        }
+    };
+
     const handleJumpToHistory = (date) => {
         setHistoryFilter({ dateRange: [new Date(date), new Date(date)] });
         setActiveTab("history");
@@ -1124,6 +1134,7 @@ function App() {
                         logs={performanceLogs}
                         onSave={handleSavePerformance}
                         onViewDetails={handleJumpToHistory}
+                        onDeleteLog={handleDeletePerformanceLog}
                         paymentMethods={paymentMethods}
                     />
                 )}
