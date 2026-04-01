@@ -351,20 +351,48 @@ function App() {
         return counts;
     }, [transactions]);
 
-    const handleCheckout = (customerName, vendedorName, paymentsOrMethod, notes) => {
+    const handleCheckout = (customerName, vendedorName, paymentsOrMethod, notes, forcedTotal = null) => {
+        const finalTotal = forcedTotal !== null ? forcedTotal : cartTotal;
+
         // paymentsOrMethod can be a string (legacy) or an array [{ method, amount }]
         const paymentsArray = Array.isArray(paymentsOrMethod)
             ? paymentsOrMethod
-            : [{ method: paymentsOrMethod, amount: cartTotal }];
+            : [{ method: paymentsOrMethod, amount: finalTotal }];
         const primaryMethod = paymentsArray[0]?.method || "Efectivo";
         try {
             const batch = writeBatch(db);
             const transRef = doc(collection(db, colName("transactions")));
 
             const isCustomTotal = customTotalsByTable[activeTable] !== null && customTotalsByTable[activeTable] !== undefined && customTotalsByTable[activeTable] !== "";
-            const finalNotes = isCustomTotal
+            const isServicio = primaryMethod === "Servicio";
+            const finalNotes = (isCustomTotal && !isServicio)
                 ? (notes ? `${notes} (Descuento personalizado)` : "Descuento personalizado")
                 : notes;
+
+            const preCustomTotal = activeCart.reduce((sum, item) => {
+                const activeCustomer = customers.find(c => c.id === activeCustomerId);
+                const priceType = activeCustomer?.priceType || "special";
+                let bp = item.price;
+                const isFlex = item.name?.toLowerCase() === "otro" || item.isPriceFlexible;
+                if (activeCustomerId && !isFlex) {
+                    if (priceType === "wholesale" && item.wholesalePrice) bp = item.wholesalePrice;
+                    else if (priceType === "special" && item.specialPrice) bp = item.specialPrice;
+                    else if (priceType === "general") bp = item.price;
+                }
+                const prm = promotions.find(p => p.productId === item.id);
+                if (prm && item.cartQuantity >= prm.quantity) {
+                    if (prm.type === "bulk") {
+                        return sum + (item.cartQuantity * prm.price);
+                    } else {
+                        const pCount = Math.floor(item.cartQuantity / prm.quantity);
+                        const eCount = item.cartQuantity % prm.quantity;
+                        return sum + (pCount * prm.price + eCount * bp);
+                    }
+                }
+                return sum + (bp * item.cartQuantity);
+            }, 0);
+
+            const discountRatio = preCustomTotal > 0 ? (finalTotal / preCustomTotal) : 0;
 
             batch.set(transRef, {
                 date: new Date(),
@@ -373,7 +401,7 @@ function App() {
                 paymentMethod: primaryMethod,
                 payments: paymentsArray,
                 notes: finalNotes || "",
-                total: cartTotal,
+                total: finalTotal,
                 items: activeCart.map(item => {
                     const activeCustomer = customers.find(c => c.id === activeCustomerId);
                     const priceType = activeCustomer?.priceType || "special";
@@ -389,16 +417,35 @@ function App() {
                             basePrice = item.price;
                         }
                     }
+                    const productData = products.find(p => p.id === item.id);
+                    const originalPrice = productData?.price || item.price;
                     const promo = promotions.find(p => p.productId === item.id);
-                    const subtotal = (() => {
+                    
+                    const itemSubtotalBeforeGlobal = (() => {
                         if (promo && item.cartQuantity >= promo.quantity) {
-                            const promoCount = Math.floor(item.cartQuantity / promo.quantity);
-                            const extraCount = item.cartQuantity % promo.quantity;
-                            return promoCount * promo.price + extraCount * basePrice;
+                            if (promo.type === "bulk") {
+                                return promo.price * item.cartQuantity;
+                            } else {
+                                const promoCount = Math.floor(item.cartQuantity / promo.quantity);
+                                const extraCount = item.cartQuantity % promo.quantity;
+                                return promoCount * promo.price + extraCount * basePrice;
+                            }
                         }
                         return basePrice * item.cartQuantity;
                     })();
-                    return { id: item.id, name: item.name, price: basePrice, cartQuantity: item.cartQuantity, subtotal };
+
+                    const subtotal = Math.round(itemSubtotalBeforeGlobal * discountRatio);
+                    const discount = (originalPrice * item.cartQuantity) - subtotal;
+
+                    return { 
+                        id: item.id, 
+                        name: item.name, 
+                        originalPrice, 
+                        price: basePrice, 
+                        cartQuantity: item.cartQuantity, 
+                        discount, 
+                        subtotal 
+                    };
                 })
             });
 

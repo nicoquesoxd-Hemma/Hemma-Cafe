@@ -2,6 +2,7 @@ import React, { useState, useMemo } from "react";
 import ExcelJS from "exceljs/dist/exceljs.min.js";
 import SafeEmoji from "./SafeEmoji";
 import { saveAs } from "file-saver";
+import { useApp } from "../context/AppProvider";
 import DatePicker, { registerLocale } from "react-datepicker";
 import es from "date-fns/locale/es";
 import "react-datepicker/dist/react-datepicker.css";
@@ -18,6 +19,7 @@ const formatCurrency = (amount) => {
 };
 
 function SalesHistory({ transactions, vendedores, products, categories, initialFilters, onClearInitialFilters, onPrint, onUpdateTransaction, paymentMethods }) {
+    const { showToast, showConfirm } = useApp();
     const [filters, setFilters] = useState({
         dateRange: [new Date(), new Date()],
         minPrice: "",
@@ -47,10 +49,9 @@ function SalesHistory({ transactions, vendedores, products, categories, initialF
     }, [initialFilters, onClearInitialFilters]);
 
     const filteredTransactions = useMemo(() => {
-        console.log("Transacciones recibidas:", transactions);
         return [...transactions]
             .filter((t) => {
-                if (!t.date) return true; // Mostrar si no hay fecha para debug
+                if (!t.date) return true;
                 const transDate = t.date?.toDate ? t.date.toDate() : new Date(t.date);
                 const [startDate, endDate] = filters.dateRange;
 
@@ -72,7 +73,6 @@ function SalesHistory({ transactions, vendedores, products, categories, initialF
                     if (!t.items || !t.items.some((item) => item.name?.toLowerCase().includes(query))) return false;
                 }
                 if (filters.paymentMethod) {
-                    // Match against payments array (split payment) OR paymentMethod (legacy)
                     const hasMatch = (t.payments && t.payments.some(p => p.method === filters.paymentMethod))
                         || t.paymentMethod === filters.paymentMethod;
                     if (!hasMatch) return false;
@@ -139,15 +139,15 @@ function SalesHistory({ transactions, vendedores, products, categories, initialF
             { header: "Cliente", key: "cliente", width: 18 },
             { header: "Producto", key: "producto", width: 25 },
             { header: "Categoría", key: "categoria", width: 20 },
-            { header: "Precio Unit.", key: "precioUnit", width: 15 },
+            { header: "Precio Original (Unit.)", key: "precioOriginalUnit", width: 18 },
             { header: "Cantidad", key: "cantidad", width: 10 },
-            { header: "Subtotal", key: "subtotal", width: 15 },
+            { header: "Descuento Item", key: "descuentoItem", width: 15 },
+            { header: "Precio Final (Subt.)", key: "precioFinalSubt", width: 18 },
             { header: "Total Transacción", key: "totalTrans", width: 18 },
             { header: "Método de Pago", key: "metodoPago", width: 18 },
             { header: "Notas", key: "notas", width: 30 },
         ];
 
-        // Header style
         const headerRow = sheet.getRow(1);
         headerRow.font = { bold: true, color: { argb: "FFFFFFFF" } };
         headerRow.fill = {
@@ -169,9 +169,10 @@ function SalesHistory({ transactions, vendedores, products, categories, initialF
                     cliente: t.customerName || "General",
                     producto: item.name,
                     categoria: categoryName,
-                    precioUnit: item.price,
+                    precioOriginalUnit: item.originalPrice !== undefined ? item.originalPrice : item.price,
                     cantidad: item.cartQuantity || 1,
-                    subtotal: item.subtotal || item.price * (item.cartQuantity || 1),
+                    descuentoItem: item.discount !== undefined ? item.discount : 0,
+                    precioFinalSubt: item.subtotal !== undefined ? item.subtotal : (item.price * (item.cartQuantity || 1)),
                     totalTrans: t.total,
                     metodoPago: t.paymentMethod || "Efectivo",
                     notas: idx === 0 ? (t.notes || "") : "",
@@ -179,8 +180,7 @@ function SalesHistory({ transactions, vendedores, products, categories, initialF
             });
         });
 
-        // Currency formatting
-        ["G", "I", "J"].forEach((col) => {
+        ["G", "I", "J", "K"].forEach((col) => {
             sheet.getColumn(col).numFmt = '"$"#,##0';
         });
 
@@ -197,15 +197,12 @@ function SalesHistory({ transactions, vendedores, products, categories, initialF
         }
     };
 
-
-
     const sortedColumnStyle = (key) => ({
         cursor: "pointer",
         userSelect: "none",
         background: sortKey === key ? "rgba(14,115,0,0.1)" : "transparent",
         padding: "1rem 0.5rem",
     });
-
 
     const handleStartEdit = (transaction) => {
         setEditingId(transaction.id);
@@ -226,15 +223,13 @@ function SalesHistory({ transactions, vendedores, products, categories, initialF
     const handleSaveEdit = (transaction) => {
         const newTotal = tempItems.reduce((acc, item) => acc + (item.subtotal || item.price * (item.cartQuantity || 1)), 0);
         
-        // Validate split payments if any
         if (tempPayments.length > 1) {
             const paymentsTotal = tempPayments.reduce((acc, p) => acc + (parseFloat(p.amount) || 0), 0);
-            if (Math.abs(paymentsTotal - newTotal) > 0.01) {
-                alert(`El total de los pagos ($${paymentsTotal.toLocaleString()}) debe coincidir con el total de la venta ($${newTotal.toLocaleString()})`);
+            if (splitPaymentEnabled && Math.abs(paymentsTotal - newTotal) > 0.01) {
+                showToast(`El total de los pagos ($${paymentsTotal.toLocaleString()}) debe coincidir con el total de la venta ($${newTotal.toLocaleString()})`, "error");
                 return;
             }
         } else if (tempPayments.length === 1) {
-            // Update single payment amount to match new total
             tempPayments[0].amount = newTotal;
         }
 
@@ -265,10 +260,6 @@ function SalesHistory({ transactions, vendedores, products, categories, initialF
         if (existingIndex > -1) {
             handleUpdateTempQuantity(existingIndex, 1);
         } else {
-            // Determine price based on current transaction customer (if reachable)
-            // For simplicity, we'll try to guess or use Normal Price.
-            // Actually, we should probably check the transaction's customer type, but transactions only store customerName.
-            // Let's use item.price as default, or check if we can reconstruct the priceType.
             setTempItems([...tempItems, {
                 id: product.id,
                 name: product.name,
@@ -289,7 +280,6 @@ function SalesHistory({ transactions, vendedores, products, categories, initialF
 
     return (
         <div style={{ display: "grid", gridTemplateColumns: "300px 1fr", gap: "2rem", alignItems: "start" }}>
-            {/* Sidebar Filtros */}
             <div style={{ position: "sticky", top: "1rem" }}>
                 <div className="card" style={{ padding: "1.5rem" }}>
                     <h2 style={{ color: "var(--color-primary)", marginBottom: "1.5rem", fontSize: "1.4rem" }}>Filtros</h2>
@@ -373,6 +363,7 @@ function SalesHistory({ transactions, vendedores, products, categories, initialF
                                 <option value="Bre-B">Bre-B</option>
                                 <option value="Nequi">Nequi</option>
                                 <option value="Daviplata">Daviplata</option>
+                                <option value="Servicio">Servicio</option>
                             </select>
                         </div>
 
@@ -418,7 +409,6 @@ function SalesHistory({ transactions, vendedores, products, categories, initialF
                 </div>
             </div>
 
-            {/* Contenido Principal (Tabla) */}
             <div className="card" style={{ minWidth: 0 }}>
                 <div style={{ marginBottom: "1.5rem" }}>
                     <h2 style={{ color: "var(--color-primary)", margin: 0 }}>Historial de Transacciones</h2>
@@ -504,7 +494,6 @@ function SalesHistory({ transactions, vendedores, products, categories, initialF
                                             </td>
                                             <td style={{ padding: "1rem 0.5rem", fontWeight: "bold" }}>{formatCurrency(t.total)}</td>
                                             <td style={{ padding: "1rem 0.5rem" }}>
-                                                {/* Split payment: show all method pills; legacy: single pill */}
                                                 {t.payments && t.payments.length > 1 ? (
                                                     <div style={{ display: "flex", flexWrap: "wrap", gap: "0.3rem" }}>
                                                         {t.payments.map((p, i) => (
@@ -603,7 +592,8 @@ function SalesHistory({ transactions, vendedores, products, categories, initialF
                                                             <thead>
                                                                 <tr style={{ color: "#666", borderBottom: "1px solid #eee" }}>
                                                                     <th style={{ padding: "0.5rem", textAlign: "left" }}>Producto</th>
-                                                                    <th style={{ padding: "0.5rem", textAlign: "right" }}>Precio</th>
+                                                                    <th style={{ padding: "0.5rem", textAlign: "right" }}>P. Original</th>
+                                                                    <th style={{ padding: "0.5rem", textAlign: "right" }}>Descuento</th>
                                                                     <th style={{ padding: "0.5rem", textAlign: "center" }}>Cant.</th>
                                                                     <th style={{ padding: "0.5rem", textAlign: "right" }}>Subtotal</th>
                                                                     <th style={{ padding: "0.5rem", textAlign: "center", width: "80px" }}></th>
@@ -613,8 +603,11 @@ function SalesHistory({ transactions, vendedores, products, categories, initialF
                                                                 {(editingId === t.id ? tempItems : (t.items || [])).map((item, idx) => (
                                                                     <tr key={idx} style={{ borderBottom: "1px solid #f9f9f9" }}>
                                                                         <td style={{ padding: "0.5rem" }}>{item.name}</td>
-                                                                        <td style={{ padding: "0.5rem", textAlign: "right" }}>
-                                                                            {formatCurrency(item.price)}
+                                                                        <td style={{ padding: "0.5rem", textAlign: "right", color: "#666" }}>
+                                                                            {formatCurrency(item.originalPrice !== undefined ? item.originalPrice : item.price)}
+                                                                        </td>
+                                                                        <td style={{ padding: "0.5rem", textAlign: "right", color: (item.discount !== undefined ? item.discount : 0) > 0 ? "#d32f2f" : "#666" }}>
+                                                                            {(item.discount !== undefined ? item.discount : 0) > 0 ? `-${formatCurrency(item.discount)}` : "-"}
                                                                         </td>
                                                                         <td style={{ padding: "0.5rem", textAlign: "center" }}>
                                                                             {editingId === t.id ? (
@@ -628,7 +621,7 @@ function SalesHistory({ transactions, vendedores, products, categories, initialF
                                                                             )}
                                                                         </td>
                                                                         <td style={{ padding: "0.5rem", textAlign: "right", fontWeight: "600" }}>
-                                                                            {formatCurrency(item.subtotal || item.price * (item.cartQuantity || 1))}
+                                                                            {formatCurrency(item.subtotal !== undefined ? item.subtotal : (item.price * (item.cartQuantity || 1)))}
                                                                         </td>
                                                                         <td style={{ padding: "0.5rem", textAlign: "center" }}>
                                                                             {editingId === t.id && (
@@ -678,7 +671,7 @@ function SalesHistory({ transactions, vendedores, products, categories, initialF
                                                                     </tr>
                                                                 )}
                                                                 <tr>
-                                                                    <td colSpan="3" style={{ padding: "1rem 0.5rem 0.5rem 0.5rem", textAlign: "right", fontWeight: "600" }}>
+                                                                    <td colSpan="4" style={{ padding: "1rem 0.5rem 0.5rem 0.5rem", textAlign: "right", fontWeight: "600" }}>
                                                                         TOTAL:
                                                                     </td>
                                                                     <td
@@ -761,12 +754,14 @@ function SalesHistory({ transactions, vendedores, products, categories, initialF
                                                                     >Cancelar</button>
                                                                     <button 
                                                                         onClick={() => {
-                                                                            if (window.confirm("¿Seguro que deseas eliminar esta transacción por completo? Esta acción no se puede deshacer.")) {
-                                                                                onUpdateTransaction(t.id, [], 0, t.items);
-                                                                                setEditingId(null);
-                                                                            }
+                                                                            showConfirm("¿Seguro que deseas eliminar esta transacción por completo? Esta acción no se puede deshacer.").then((confirmed) => {
+                                                                                if (confirmed) {
+                                                                                    onUpdateTransaction(t.id, [], 0, t.items);
+                                                                                    setEditingId(null);
+                                                                                }
+                                                                            });
                                                                         }}
-                                                                        style={{ padding: "0.5rem 1rem", borderRadius: "8px", border: "none", background: "#fef2f2", color: "#dc2626", fontWeight: "600", cursor: "pointer", fontSize: "0.85rem", border: "1px solid #fecaca" }}
+                                                                        style={{ padding: "0.5rem 1rem", borderRadius: "8px", background: "#fef2f2", color: "#dc2626", fontWeight: "600", cursor: "pointer", fontSize: "0.85rem", border: "1px solid #fecaca" }}
                                                                     >Eliminar Venta</button>
                                                                     <button 
                                                                         onClick={() => handleSaveEdit(t)}

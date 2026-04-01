@@ -3,6 +3,7 @@ import { isEmojiSupported } from "../utils/emojiSupport";
 import SafeEmoji from "./SafeEmoji";
 import ExcelJS from "exceljs/dist/exceljs.min.js";
 import { saveAs } from "file-saver";
+import { useApp } from "../context/AppProvider";
 
 const formatCurrency = (amount) => {
     if (typeof amount !== 'number' || isNaN(amount)) return "$ 0";
@@ -15,6 +16,7 @@ const formatCurrency = (amount) => {
 };
 
 function Loans({ loans, onLoanPayment, paymentMethods, vendedores }) {
+    const { showToast } = useApp();
     const [expandedId, setExpandedId] = React.useState(null);
     const [paymentItems, setPaymentItems] = React.useState({}); // { productId: quantity }
     const [payMethod, setPayMethod] = React.useState("Efectivo");
@@ -58,11 +60,11 @@ function Loans({ loans, onLoanPayment, paymentMethods, vendedores }) {
             }));
 
         if (selectedList.length === 0) {
-            alert("Selecciona al menos un producto para pagar");
+            showToast("Selecciona al menos un producto para pagar", "warning");
             return;
         }
         if (!selectedVendedor) {
-            alert("Selecciona un vendedor");
+            showToast("Selecciona un vendedor", "warning");
             return;
         }
 

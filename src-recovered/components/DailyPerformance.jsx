@@ -5,6 +5,7 @@ import es from "date-fns/locale/es";
 import "react-datepicker/dist/react-datepicker.css";
 import ExcelJS from "exceljs/dist/exceljs.min.js";
 import { saveAs } from "file-saver";
+import { useApp } from "../context/AppProvider";
 
 registerLocale("es", es);
 
@@ -18,6 +19,7 @@ const formatCurrency = (amount) => {
 };
 
 function DailyPerformance({ transactions, logs, onSave, onViewDetails, onDeleteLog, paymentMethods }) {
+    const { showConfirm, showToast } = useApp();
     const [realAmounts, setRealAmounts] = useState({});
     const [notes, setNotes] = useState("");
     const [diffMethod, setDiffMethod] = useState("Efectivo"); // Se mantiene para compatibilidad o nota principal
@@ -443,12 +445,16 @@ function DailyPerformance({ transactions, logs, onSave, onViewDetails, onDeleteL
                                                     Ver Ventas
                                                 </button>
                                                 <button
+                                                    className="secondary"
                                                     onClick={() => {
-                                                        if (window.confirm("¿Estás seguro de que deseas eliminar este cierre de caja? Esta acción no se puede deshacer.")) {
-                                                            onDeleteLog(log.id);
-                                                        }
+                                                        showConfirm("¿Estás seguro de que deseas eliminar este cierre de caja? Esta acción no se puede deshacer.").then(confirmed => {
+                                                            if (confirmed) {
+                                                                onDeleteLog(log.id);
+                                                                showToast("Cierre eliminado", "success");
+                                                            }
+                                                        });
                                                     }}
-                                                    style={{ background: "#ffebee", color: "#c62828", border: "none", padding: "0.4rem 0.8rem", borderRadius: "6px", cursor: "pointer", fontSize: "0.8rem" }}
+                                                    style={{ padding: "0.4rem 0.8rem", fontSize: "0.8rem", borderColor: "#ffcdd2", color: "#c62828" }}
                                                 >
                                                     Eliminar
                                                 </button>

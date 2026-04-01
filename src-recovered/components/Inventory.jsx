@@ -284,7 +284,7 @@ function Inventory({
         showToast("Categoría agregada", "success");
     };
 
-    const [newPromo, setNewPromo] = useState({ productId: "", quantity: "", price: "" });
+    const [newPromo, setNewPromo] = useState({ productId: "", quantity: "", price: "", type: "pack" });
     const handleAddPromotion = (e) => {
         e.preventDefault();
         if (!newPromo.productId || !newPromo.quantity || !newPromo.price) return;
@@ -292,8 +292,9 @@ function Inventory({
             ...newPromo,
             quantity: parseInt(newPromo.quantity),
             price: parseFloat(newPromo.price),
+            type: newPromo.type || "pack"
         });
-        setNewPromo({ productId: "", quantity: "", price: "" });
+        setNewPromo({ productId: "", quantity: "", price: "", type: "pack" });
         showToast("Promoción agregada", "success");
     };
 
@@ -727,11 +728,22 @@ function Inventory({
                                     />
                                     <input
                                         type="number"
-                                        placeholder="Precio Total Promo"
+                                        placeholder={newPromo.type === "bulk" ? "Precio Unitario" : "Precio Total Pack"}
                                         value={newPromo.price}
                                         onChange={(e) => setNewPromo({ ...newPromo, price: e.target.value })}
                                         style={{ width: "100%", padding: "0.6rem", borderRadius: "8px", border: "1px solid #ddd" }}
                                     />
+                                </div>
+                                <div style={{ display: "flex", gap: "1rem", padding: "0.5rem", background: "#fffaf0", borderRadius: "8px", alignItems: "center", border: "1px solid #ffe8cc" }}>
+                                    <span style={{ fontSize: "0.82rem", fontWeight: "700", color: "#e65100" }}>Modo:</span>
+                                    <label style={{ display: "flex", alignItems: "center", gap: "0.3rem", cursor: "pointer", fontSize: "0.85rem" }}>
+                                        <input type="radio" name="promoType" value="pack" checked={newPromo.type === "pack"} onChange={() => setNewPromo({ ...newPromo, type: "pack" })} />
+                                        Pack (Ej: 2 x $5000)
+                                    </label>
+                                    <label style={{ display: "flex", alignItems: "center", gap: "0.3rem", cursor: "pointer", fontSize: "0.85rem" }}>
+                                        <input type="radio" name="promoType" value="bulk" checked={newPromo.type === "bulk"} onChange={() => setNewPromo({ ...newPromo, type: "bulk" })} />
+                                        Unitario (Ej: 3+ x $2000 c/u)
+                                    </label>
                                 </div>
                                 <button type="submit" style={{ background: "#ff8800", color: "white", border: "none", padding: "0.8rem", borderRadius: "8px", fontWeight: "bold", textTransform: "uppercase" }}>Activar Promoción</button>
                             </form>
@@ -746,7 +758,9 @@ function Inventory({
                                                     <div key={p.id} style={{ display: "flex", justifyContent: "space-between", background: "#fffaf0", padding: "0.5rem", borderRadius: "6px", marginBottom: "0.4rem", border: "1px solid #ffe8cc" }}>
                                                         <span>
                                                             <b>{product.name}</b>:
-                                                            {` ${p.quantity}+ x $${(p.price || 0).toLocaleString()}`}
+                                                            {p.type === "bulk" 
+                                                                ? ` A partir de ${p.quantity} unid. a $${(p.price || 0).toLocaleString()} c/u`
+                                                                : ` ${p.quantity}+ por $${(p.price || 0).toLocaleString()} (Pack)`}
                                                         </span>
                                                         <button
                                                             onClick={() => onDeletePromotion(p.id)}
