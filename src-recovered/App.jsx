@@ -325,9 +325,13 @@ function App() {
             // Apply Promotions
             const promo = promotions.find((p) => p.productId === item.id);
             if (promo && item.cartQuantity >= promo.quantity) {
-                const promoCount = Math.floor(item.cartQuantity / promo.quantity);
-                const extraCount = item.cartQuantity % promo.quantity;
-                return acc + (promoCount * promo.price + extraCount * basePrice);
+                if (promo.type === "bulk") {
+                    return acc + (promo.price * item.cartQuantity);
+                } else {
+                    const promoCount = Math.floor(item.cartQuantity / promo.quantity);
+                    const extraCount = item.cartQuantity % promo.quantity;
+                    return acc + (promoCount * promo.price + extraCount * basePrice);
+                }
             }
             return acc + basePrice * item.cartQuantity;
         }, 0);
@@ -513,11 +517,21 @@ function App() {
                         basePrice = item.specialPrice;
                     }
                 }
-                
+
+                // Apply promotion pricing to loans as well
+                const promo = promotions.find(p => p.productId === item.id);
+                let effectivePrice = basePrice;
+                if (promo && item.cartQuantity >= promo.quantity) {
+                    if (promo.type === "bulk") {
+                        effectivePrice = promo.price;
+                    }
+                    // For "pack" type, basePrice stays the same (the pack discount applies to total, not unit price)
+                }
+
                 return {
                     id: item.id,
                     name: item.name,
-                    price: basePrice,
+                    price: effectivePrice,
                     cartQuantity: item.cartQuantity,
                     dateAdded: new Date().toISOString()
                 };
