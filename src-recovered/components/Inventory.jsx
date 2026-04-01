@@ -285,6 +285,15 @@ function Inventory({
     };
 
     const [newPromo, setNewPromo] = useState({ productId: "", quantity: "", price: "", type: "pack" });
+    const [promoSearch, setPromoSearch] = useState("");
+    const [isPromoDropdownOpen, setIsPromoDropdownOpen] = useState(false);
+
+    const filteredPromoProducts = useMemo(() => {
+        if (!promoSearch) return [];
+        return products
+            .filter(p => p.name.toLowerCase().includes(promoSearch.toLowerCase()))
+            .sort((a, b) => a.name.localeCompare(b.name));
+    }, [products, promoSearch]);
     const handleAddPromotion = (e) => {
         e.preventDefault();
         if (!newPromo.productId || !newPromo.quantity || !newPromo.price) return;
@@ -295,6 +304,8 @@ function Inventory({
             type: newPromo.type || "pack"
         });
         setNewPromo({ productId: "", quantity: "", price: "", type: "pack" });
+        setPromoSearch("");
+        setIsPromoDropdownOpen(false);
         showToast("Promoción agregada", "success");
     };
 
@@ -710,14 +721,74 @@ function Inventory({
                     <div className={`collapsible-wrapper ${expandedSections.promotions ? "open" : ""}`}>
                         <div className="collapsible-content">
                             <form onSubmit={handleAddPromotion} style={{ display: "flex", flexDirection: "column", gap: "0.8rem" }}>
-                                <select
-                                    value={newPromo.productId}
-                                    onChange={(e) => setNewPromo({ ...newPromo, productId: e.target.value })}
-                                    style={{ width: "100%", padding: "0.6rem", borderRadius: "8px", border: "1px solid #ddd" }}
-                                >
-                                    <option value="">Seleccionar Producto</option>
-                                    {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                                </select>
+                                <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem", position: "relative" }}>
+                                    <label style={{ fontSize: "0.8rem", fontWeight: "bold", color: "#666" }}>Buscar Producto:</label>
+                                    <input
+                                        placeholder="🔍 Escribe el nombre del producto..."
+                                        value={promoSearch}
+                                        onChange={(e) => {
+                                            setPromoSearch(e.target.value);
+                                            setIsPromoDropdownOpen(true);
+                                            // Reset product ID if they start typing again, 
+                                            // unless we select one later.
+                                            if (newPromo.productId) setNewPromo(prev => ({...prev, productId: ""}));
+                                        }}
+                                        onFocus={() => {
+                                            if (promoSearch) setIsPromoDropdownOpen(true);
+                                        }}
+                                        style={{ width: "100%", padding: "0.7rem", borderRadius: "8px", border: "1px solid #ddd" }}
+                                    />
+                                    
+                                    {isPromoDropdownOpen && filteredPromoProducts.length > 0 && (
+                                        <div style={{
+                                            position: "absolute",
+                                            top: "100%",
+                                            left: 0,
+                                            right: 0,
+                                            background: "white",
+                                            border: "1px solid #ddd",
+                                            borderRadius: "8px",
+                                            marginTop: "4px",
+                                            maxHeight: "200px",
+                                            overflowY: "auto",
+                                            zIndex: 100,
+                                            boxShadow: "0 4px 12px rgba(0,0,0,0.15)"
+                                        }}>
+                                            {filteredPromoProducts.map(p => (
+                                                <div
+                                                    key={p.id}
+                                                    onClick={() => {
+                                                        setNewPromo(prev => ({ ...prev, productId: p.id }));
+                                                        setPromoSearch(p.name);
+                                                        setIsPromoDropdownOpen(false);
+                                                    }}
+                                                    style={{
+                                                        padding: "0.7rem 1rem",
+                                                        cursor: "pointer",
+                                                        borderBottom: "1px solid #f0f0f0",
+                                                        display: "flex",
+                                                        justifyContent: "space-between",
+                                                        alignItems: "center",
+                                                        fontSize: "0.9rem"
+                                                    }}
+                                                    onMouseOver={(e) => e.target.style.background = "#f5f5f5"}
+                                                    onMouseOut={(e) => e.target.style.background = "transparent"}
+                                                >
+                                                    <span style={{ fontWeight: "600" }}>{p.name}</span>
+                                                    <span style={{ fontSize: "0.75rem", color: "#888" }}>
+                                                        {categories.find(c => c.id === p.categoryId)?.name || ""}
+                                                    </span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    {newPromo.productId && (
+                                        <div style={{ fontSize: "0.75rem", color: "#2e7d32", fontWeight: "bold", display: "flex", alignItems: "center", gap: "0.3rem" }}>
+                                            <SafeEmoji emoji="✅" /> Producto seleccionado
+                                        </div>
+                                    )}
+                                </div>
                                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.8rem" }}>
                                     <input
                                         type="number"
