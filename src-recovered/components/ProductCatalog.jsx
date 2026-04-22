@@ -10,7 +10,7 @@ const formatCurrency = (amount) => {
     }).format(amount);
 };
 
-function ProductCatalog({ products, categories, selectedCustomerId, customerPriceType = "special", onAddToCart, salesCount = {} }) {
+function ProductCatalog({ products, categories, selectedCustomerId, customerPriceType = "special", onAddToCart, salesCount = {}, layoutMode = "grid" }) {
     const [searchQuery, setSearchQuery] = useState("");
     const [categoryFilter, setCategoryFilter] = useState("");
     const [sortBy, setSortBy] = useState("mostSold");
@@ -38,10 +38,6 @@ function ProductCatalog({ products, categories, selectedCustomerId, customerPric
                     case "price":
                         valA = a.price;
                         valB = b.price;
-                        break;
-                    case "category":
-                        valA = (categories?.find((c) => c.id === a.categoryId)?.name || "").toLowerCase();
-                        valB = (categories?.find((c) => c.id === b.categoryId)?.name || "").toLowerCase();
                         break;
                     case "category":
                         valA = (categories?.find((c) => c.id === a.categoryId)?.name || "").toLowerCase();
@@ -95,7 +91,7 @@ function ProductCatalog({ products, categories, selectedCustomerId, customerPric
     };
 
     return (
-        <div style={{ display: "flex", gap: "1rem" }}>
+        <div style={{ display: "flex", gap: "1rem", flexDirection: layoutMode === "list" ? "column" : "row" }}>
             {/* Price Modal */}
             {isPriceModalOpen && (
                 <div style={{
@@ -147,199 +143,258 @@ function ProductCatalog({ products, categories, selectedCustomerId, customerPric
                 </div>
             )}
 
-            {/* Sidebar Filters */}
-            <div
-                className="card"
-                style={{
-                    width: "200px",
-                    flexShrink: 0,
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "0.8rem",
-                    padding: "1rem",
-                    alignSelf: "flex-start",
-                    position: "sticky",
-                    top: "1rem",
-                    zIndex: 10
-                }}
-            >
-                <h3 style={{ margin: 0, color: "var(--color-primary)", fontSize: "1rem" }}>Filtros</h3>
-                <div>
-                    <label style={labelStyle}>Buscar</label>
-                    <input
-                        type="text"
-                        placeholder="Producto..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        style={inputStyle}
-                    />
-                </div>
-                <div>
-                    <label style={labelStyle}>Categoría</label>
-                    <select
-                        value={categoryFilter}
-                        onChange={(e) => setCategoryFilter(e.target.value)}
-                        style={inputStyle}
-                    >
-                        <option value="">Todas</option>
-                        {categories.map((cat) => (
-                            <option key={cat.id} value={cat.id}>
-                                {cat.name}
-                            </option>
-                        ))}
-                    </select>
-                </div>
-                <div>
-                    <label style={labelStyle}>Ordenar por</label>
-                    <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} style={inputStyle}>
-                        <option value="name">Nombre</option>
-                        <option value="price">Precio</option>
-                        <option value="category">Categoría</option>
-                        <option value="stock">Stock</option>
-                        <option value="mostSold">Más Vendidos</option>
-                    </select>
-                </div>
-                <button
-                    onClick={toggleSortOrder}
-                    className="secondary"
-                    style={{ padding: "0.5rem", fontSize: "0.85rem", width: "100%" }}
-                    title={sortOrder === "asc" ? "Ascendente" : "Descendente"}
+            {/* Sidebar Filters - HIDDEN IN LIST MODE */}
+            {layoutMode !== "list" && (
+                <div
+                    className="card"
+                    style={{
+                        width: "200px",
+                        flexShrink: 0,
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "0.8rem",
+                        padding: "1rem",
+                        alignSelf: "flex-start",
+                        position: "sticky",
+                        top: "1rem",
+                        zIndex: 10
+                    }}
                 >
-                    {sortOrder === "asc" ? "↑ Asc" : "↓ Desc"}
-                </button>
-            </div>
+                    <h3 style={{ margin: 0, color: "var(--color-primary)", fontSize: "1rem" }}>Filtros</h3>
+                    <div>
+                        <label style={labelStyle}>Buscar</label>
+                        <input
+                            type="text"
+                            placeholder="Producto..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            style={inputStyle}
+                        />
+                    </div>
+                    <div>
+                        <label style={labelStyle}>Categoría</label>
+                        <select
+                            value={categoryFilter}
+                            onChange={(e) => setCategoryFilter(e.target.value)}
+                            style={inputStyle}
+                        >
+                            <option value="">Todas</option>
+                            {categories.map((cat) => (
+                                <option key={cat.id} value={cat.id}>
+                                    {cat.name}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+                    <div>
+                        <label style={labelStyle}>Ordenar por</label>
+                        <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} style={inputStyle}>
+                            <option value="name">Nombre</option>
+                            <option value="price">Precio</option>
+                            <option value="category">Categoría</option>
+                            <option value="stock">Stock</option>
+                            <option value="mostSold">Más Vendidos</option>
+                        </select>
+                    </div>
+                    <button
+                        onClick={toggleSortOrder}
+                        className="secondary"
+                        style={{ padding: "0.5rem", fontSize: "0.85rem", width: "100%" }}
+                        title={sortOrder === "asc" ? "Ascendente" : "Descendente"}
+                    >
+                        {sortOrder === "asc" ? "↑ Asc" : "↓ Desc"}
+                    </button>
+                </div>
+            )}
 
-            {/* Product Grid */}
+            {/* Conditional Display: Grid or List */}
             <div style={{ flex: 1, minWidth: 0 }}>
-                <div className="product-grid">
-                    {filteredProducts.map((product) => {
-                        const categoryName = categories?.find((c) => c.id === product.categoryId)?.name;
-                        const isOutOfStock = product.quantity <= 0;
+                {layoutMode === "grid" ? (
+                    <div className="product-grid">
+                        {filteredProducts.map((product) => {
+                            const categoryName = categories?.find((c) => c.id === product.categoryId)?.name;
+                            const isOutOfStock = product.quantity <= 0;
 
-                        let hasDiscount = false;
-                        let currentPrice = product.price;
+                            let hasDiscount = false;
+                            let currentPrice = product.price;
 
-                        if (selectedCustomerId) {
-                            if (customerPriceType === "wholesale" && product.wholesalePrice) {
-                                currentPrice = product.wholesalePrice;
-                                hasDiscount = true;
-                            } else if (customerPriceType === "special" && product.specialPrice) {
-                                currentPrice = product.specialPrice;
-                                hasDiscount = true;
+                            if (selectedCustomerId) {
+                                if (customerPriceType === "wholesale" && product.wholesalePrice) {
+                                    currentPrice = product.wholesalePrice;
+                                    hasDiscount = true;
+                                } else if (customerPriceType === "special" && product.specialPrice) {
+                                    currentPrice = product.specialPrice;
+                                    hasDiscount = true;
+                                }
                             }
-                        }
 
-                        return (
-                            <div
-                                onClick={() => {
-                                    if (isOutOfStock) return;
-                                    if (product.name.toLowerCase() === "otro" || product.isPriceFlexible) {
-                                        setPendingProduct(product);
-                                        setIsPriceModalOpen(true);
-                                    } else {
-                                        onAddToCart(product);
-                                    }
-                                }}
-                                key={product.id}
-                                className={`product-card ${isOutOfStock ? "out-of-stock" : ""}`}
-                                style={{
-                                    display: "flex",
-                                    flexDirection: "column",
-                                    justifyContent: "space-between",
-                                    opacity: isOutOfStock ? 0.6 : 1,
-                                    cursor: isOutOfStock ? "not-allowed" : "pointer",
-                                    position: "relative",
-                                    overflow: "hidden",
-                                }}
-                            >
-                                {isOutOfStock && (
-                                    <div
-                                        style={{
-                                            position: "absolute",
-                                            top: "50%",
-                                            left: "50%",
-                                            transform: "translate(-50%, -50%)",
-                                            background: "rgba(255,0,0,0.8)",
-                                            color: "white",
-                                            padding: "0.5rem 1rem",
-                                            borderRadius: "4px",
-                                            fontWeight: "bold",
-                                            zIndex: 2,
-                                        }}
-                                    >
-                                        AGOTADO
-                                    </div>
-                                )}
-                                {product.image && (
-                                    <img
-                                        src={product.image}
-                                        alt={product.name}
-                                        style={{
-                                            width: "100%",
-                                            height: "120px",
-                                            objectFit: "cover",
-                                            borderRadius: "8px 8px 0 0",
-                                            marginBottom: "0.5rem",
-                                        }}
-                                    />
-                                )}
-                                <div>
-                                    <h3>{product.name}</h3>
-                                    {categoryName && (
-                                        <span
-                                            style={{
-                                                fontSize: "0.75rem",
-                                                background: "var(--color-primary)",
-                                                color: "white",
-                                                padding: "0.1rem 0.4rem",
-                                                borderRadius: "10px",
-                                                display: "inline-block",
-                                                marginBottom: "0.5rem",
-                                            }}
-                                        >
-                                            {categoryName}
-                                        </span>
-                                    )}
-                                </div>
+                            return (
                                 <div
+                                    onClick={() => {
+                                        if (isOutOfStock) return;
+                                        if (product.name.toLowerCase() === "otro" || product.isPriceFlexible) {
+                                            setPendingProduct(product);
+                                            setIsPriceModalOpen(true);
+                                        } else {
+                                            onAddToCart(product);
+                                        }
+                                    }}
+                                    key={product.id}
+                                    className={`product-card ${isOutOfStock ? "out-of-stock" : ""}`}
                                     style={{
-                                        marginTop: "auto",
                                         display: "flex",
+                                        flexDirection: "column",
                                         justifyContent: "space-between",
-                                        alignItems: "center",
+                                        opacity: isOutOfStock ? 0.6 : 1,
+                                        cursor: isOutOfStock ? "not-allowed" : "pointer",
+                                        position: "relative",
+                                        overflow: "hidden",
                                     }}
                                 >
-                                    <div>
-                                        {hasDiscount && (
-                                            <span
-                                                style={{
-                                                    textDecoration: "line-through",
-                                                    color: "#999",
-                                                    fontSize: "0.8rem",
-                                                    marginRight: "0.5rem",
-                                                }}
-                                            >
-                                                {formatCurrency(product.price)}
-                                            </span>
-                                        )}
-                                        <p
-                                            className="price"
+                                    {isOutOfStock && (
+                                        <div
                                             style={{
-                                                margin: 0,
-                                                color: hasDiscount ? "#E91E63" : "var(--color-primary)",
+                                                position: "absolute",
+                                                top: "50%",
+                                                left: "50%",
+                                                transform: "translate(-50%, -50%)",
+                                                background: "rgba(255,0,0,0.8)",
+                                                color: "white",
+                                                padding: "0.5rem 1rem",
+                                                borderRadius: "4px",
+                                                fontWeight: "bold",
+                                                zIndex: 2,
                                             }}
                                         >
-                                            {formatCurrency(currentPrice)}
-                                        </p>
+                                            AGOTADO
+                                        </div>
+                                    )}
+                                    {product.image && (
+                                        <img
+                                            src={product.image}
+                                            alt={product.name}
+                                            style={{
+                                                width: "100%",
+                                                height: "120px",
+                                                objectFit: "cover",
+                                                borderRadius: "8px 8px 0 0",
+                                                marginBottom: "0.5rem",
+                                            }}
+                                        />
+                                    )}
+                                    <div>
+                                        <h3>{product.name}</h3>
+                                        {categoryName && (
+                                            <span
+                                                style={{
+                                                    fontSize: "0.75rem",
+                                                    background: "var(--color-primary)",
+                                                    color: "white",
+                                                    padding: "0.1rem 0.4rem",
+                                                    borderRadius: "10px",
+                                                    display: "inline-block",
+                                                    marginBottom: "0.5rem",
+                                                }}
+                                            >
+                                                {categoryName}
+                                            </span>
+                                        )}
                                     </div>
-                                    <span style={{ fontSize: "0.8rem", color: "#666" }}>
-                                        Disp.: {product.quantity || 0}
-                                    </span>
+                                    <div
+                                        style={{
+                                            marginTop: "auto",
+                                            display: "flex",
+                                            justifyContent: "space-between",
+                                            alignItems: "center",
+                                        }}
+                                    >
+                                        <div>
+                                            {hasDiscount && (
+                                                <span
+                                                    style={{
+                                                        textDecoration: "line-through",
+                                                        color: "#999",
+                                                        fontSize: "0.8rem",
+                                                        marginRight: "0.5rem",
+                                                    }}
+                                                >
+                                                    {formatCurrency(product.price)}
+                                                </span>
+                                            )}
+                                            <p
+                                                className="price"
+                                                style={{
+                                                    margin: 0,
+                                                    color: hasDiscount ? "#E91E63" : "var(--color-primary)",
+                                                }}
+                                            >
+                                                {formatCurrency(currentPrice)}
+                                            </p>
+                                        </div>
+                                        <span style={{ fontSize: "0.8rem", color: "#666" }}>
+                                            Disp.: {product.quantity || 0}
+                                        </span>
+                                    </div>
                                 </div>
-                            </div>
-                        );
-                    })}
-                </div>
+                            );
+                        })}
+                    </div>
+                ) : (
+                    /* CONDENSED LIST VIEW (For Search Mode) */
+                    <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                        <div style={{ position: "relative", marginBottom: "0.5rem" }}>
+                            <span style={{ position: "absolute", left: "0.8rem", top: "50%", transform: "translateY(-50%)", color: "#888" }}>🔍</span>
+                            <input
+                                placeholder="Escribe nombre del producto..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                style={{
+                                    width: "100%", padding: "0.8rem 1rem 0.8rem 2.2rem",
+                                    borderRadius: "10px", border: "1px solid #ddd", fontSize: "1rem", outline: "none", boxShadow: "0 2px 5px rgba(0,0,0,0.05)"
+                                }}
+                            />
+                        </div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+                            {filteredProducts.map(product => {
+                                const isFlexible = product.name?.toLowerCase() === "otro" || product.isPriceFlexible;
+                                const isOut = product.quantity <= 0;
+                                let currentPrice = product.price;
+                                if (selectedCustomerId && !isFlexible) {
+                                    if (customerPriceType === "wholesale" && product.wholesalePrice) currentPrice = product.wholesalePrice;
+                                    else if (customerPriceType === "special" && product.specialPrice) currentPrice = product.specialPrice;
+                                }
+
+                                return (
+                                    <div 
+                                        key={product.id}
+                                        onClick={() => !isOut && (isFlexible ? (setPendingProduct(product), setIsPriceModalOpen(true)) : onAddToCart(product))}
+                                        style={{ 
+                                            display: "flex", alignItems: "center", gap: "0.8rem", padding: "0.7rem", 
+                                            background: isOut ? "#f8f8f8" : "white", border: "1px solid #eee", borderRadius: "10px",
+                                            cursor: isOut ? "not-allowed" : "pointer", opacity: isOut ? 0.6 : 1, transition: "all 0.2s"
+                                        }}
+                                        className="list-item-hover"
+                                    >
+                                        <div style={{ width: "45px", height: "45px", borderRadius: "8px", background: "#f0f0f0", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0 }}>
+                                            {product.image ? <img src={product.image} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <span style={{ fontSize: "1.4rem" }}>📦</span>}
+                                        </div>
+                                        <div style={{ flex: 1, minWidth: 0 }}>
+                                            <div style={{ fontWeight: "bold", fontSize: "1rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", color: "#333" }}>{product.name}</div>
+                                            <div style={{ fontSize: "0.75rem", color: "#777" }}>
+                                                {categories.find(c => c.id === product.categoryId)?.name || "General"} • {product.quantity} disp.
+                                            </div>
+                                        </div>
+                                        <div style={{ textAlign: "right", paddingRight: "0.5rem" }}>
+                                            <div style={{ fontWeight: "bold", color: "var(--color-primary)", fontSize: "1rem" }}>{formatCurrency(currentPrice)}</div>
+                                            <div style={{ fontSize: "0.65rem", color: "#999", fontWeight: "600" }}>Tocar para add.</div>
+                                        </div>
+                                        <div style={{ background: "var(--color-primary)", color: "white", width: "28px", height: "28px", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "bold", fontSize: "1.2rem", flexShrink: 0 }}>+</div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );

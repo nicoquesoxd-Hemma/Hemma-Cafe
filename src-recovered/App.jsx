@@ -21,6 +21,7 @@ function App() {
     const [isAuthenticated, setIsAuthenticated] = useState(
         () => localStorage.getItem(`pos_authenticated_${currentMode}`) === "true"
     );
+    const [isHeaderCollapsed, setIsHeaderCollapsed] = useState(true);
 
     const colName = (name) => currentMode === "demo" ? `demo_${name}` : name;
     const [activeTab, setActiveTab] = useState("pos");
@@ -76,6 +77,17 @@ function App() {
         return { "mostrador": null, "mesa1": null, "mesa2": null, "mesa3": null, "mesa4": null };
     });
     const [loans, setLoans] = useState([]);
+    const [isAddingMob, setIsAddingMob] = useState(false); // Ultra-mobile Search Mode
+    const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+
+    useEffect(() => {
+        const handleResize = () => setWindowWidth(window.innerWidth);
+        window.addEventListener("resize", handleResize);
+        return () => window.removeEventListener("resize", handleResize);
+    }, []);
+
+    const isMobile = windowWidth < 680;
+    const isUltraMobile = windowWidth < 500;
 
     // Real-time data sync from Firestore
     useEffect(() => {
@@ -501,10 +513,10 @@ function App() {
 
         try {
             const customerId = activeCustomerId;
-            const existingLoan = loans.find(l => l.customerId === customerId);
             const batch = writeBatch(db);
 
-            const newItems = activeCart.map(item => {
+            // 1. Preparar los items para ESTA transacción específica
+            const transactionItems = activeCart.map(item => {
                 const activeCustomer = customers.find(c => c.id === customerId);
                 const priceType = activeCustomer?.priceType || "special";
                 let basePrice = item.price;
@@ -518,14 +530,13 @@ function App() {
                     }
                 }
 
-                // Apply promotion pricing to loans as well
+                // Aplicar precios de promoción si existen
                 const promo = promotions.find(p => p.productId === item.id);
                 let effectivePrice = basePrice;
                 if (promo && item.cartQuantity >= promo.quantity) {
                     if (promo.type === "bulk") {
                         effectivePrice = promo.price;
                     }
-                    // For "pack" type, basePrice stays the same (the pack discount applies to total, not unit price)
                 }
 
                 return {
@@ -533,43 +544,26 @@ function App() {
                     name: item.name,
                     price: effectivePrice,
                     cartQuantity: item.cartQuantity,
+                    subtotal: effectivePrice * item.cartQuantity,
                     dateAdded: new Date().toISOString()
                 };
             });
 
-            if (existingLoan) {
-                const loanRef = doc(db, colName("loans"), existingLoan.id);
-                // Merge items: if product exists, add quantity; if not, add item
-                const mergedItems = [...(existingLoan.items || [])];
-                newItems.forEach(newItem => {
-                    const idx = mergedItems.findIndex(mi => mi.id === newItem.id);
-                    if (idx > -1) {
-                        mergedItems[idx].cartQuantity += newItem.cartQuantity;
-                    } else {
-                        mergedItems.push(newItem);
-                    }
-                });
+            // 2. Siempre crear un NUEVO documento de transacción de crédito (en lugar de buscar uno existente)
+            const loanRef = doc(collection(db, colName("loans")));
+            batch.set(loanRef, {
+                customerId,
+                customerName,
+                vendedorName,
+                items: transactionItems,
+                notes: notes || "",
+                date: new Date(), // Fecha de la transacción para agrupación
+                createdAt: new Date(),
+                lastUpdated: new Date(),
+                status: "pending"
+            });
 
-                batch.update(loanRef, {
-                    items: mergedItems,
-                    lastUpdated: new Date(),
-                    vendedorName: vendedorName, // Update to last seller
-                    notes: notes || existingLoan.notes || ""
-                });
-            } else {
-                const loanRef = doc(collection(db, colName("loans")));
-                batch.set(loanRef, {
-                    customerId,
-                    customerName,
-                    vendedorName,
-                    items: newItems,
-                    notes: notes || "",
-                    createdAt: new Date(),
-                    lastUpdated: new Date()
-                });
-            }
-
-            // Update product quantities (deduct from stock)
+            // 3. Actualizar cantidades de productos (descontar de inventario)
             activeCart.forEach(item => {
                 const prodRef = doc(db, colName("products"), item.id);
                 const currentQty = products.find(p => p.id === item.id)?.quantity || 0;
@@ -580,22 +574,28 @@ function App() {
 
             await batch.commit();
 
-            // Clear cart
+            // 4. Limpiar estado de la interfaz
             setTables(prev => ({ ...prev, [activeTable]: [] }));
             setSelectedCustomerIdByTable(prev => ({ ...prev, [activeTable]: "" }));
             setOrderNotesByTable(prev => ({ ...prev, [activeTable]: "" }));
+            setCustomTotalsByTable(prev => ({ ...prev, [activeTable]: null }));
 
-            showToast(`Cuenta enviada a créditos (${customerName})`, "success");
+            showToast(`Crédito registrado para ${customerName}`, "success");
         } catch (err) {
-            console.error("Error saving loan:", err);
+            console.error("Error al guardar crédito:", err);
             showToast("Error al guardar el crédito", "error");
         }
     };
 
-    const handleLoanPayment = async (loanId, paymentItems, paymentMethod, vendedorName, amount) => {
+    const handleLoanPayment = async (loanId, paymentItems, paymentsOrMethod, vendedorName, amount) => {
         try {
             const loan = loans.find(l => l.id === loanId);
             if (!loan) return;
+
+            const paymentsArray = Array.isArray(paymentsOrMethod)
+                ? paymentsOrMethod
+                : [{ method: paymentsOrMethod, amount: amount }];
+            const primaryMethod = paymentsArray[0]?.method || "Efectivo";
 
             const batch = writeBatch(db);
 
@@ -604,7 +604,8 @@ function App() {
                 date: new Date().toISOString(),
                 customerName: loan.customerName,
                 vendedorName: vendedorName,
-                paymentMethod: paymentMethod,
+                paymentMethod: primaryMethod,
+                payments: paymentsArray,
                 total: amount,
                 items: paymentItems,
                 type: "abono",
@@ -1031,139 +1032,251 @@ function App() {
     }
 
     return (
-        <div className="app">
-            <header>
-                <div className="header-top">
+        <div className="app" style={{ 
+            height: activeTab === "pos" ? "100vh" : "auto", 
+            display: "flex", 
+            flexDirection: "column", 
+            overflow: activeTab === "pos" ? "hidden" : "auto",
+            minHeight: "100vh"
+        }}>
+            {/* Floating Header Toggle Button */}
+            {activeTab === "pos" && (
+                <button
+                    onClick={() => setIsHeaderCollapsed(!isHeaderCollapsed)}
+                    style={{
+                        position: "fixed",
+                        right: "1.5rem",
+                        top: isHeaderCollapsed ? "1.5rem" : "5.5rem",
+                        zIndex: 2000,
+                        width: "45px",
+                        height: "45px",
+                        borderRadius: "50%",
+                        background: "var(--color-primary)",
+                        color: "white",
+                        border: "none",
+                        boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
+                        fontSize: "1.4rem",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        cursor: "pointer",
+                        transition: "all 0.4s cubic-bezier(0.4, 0, 0.2, 1)"
+                    }}
+                    title={isHeaderCollapsed ? "Mostrar Menú" : "Ocultar Menú"}
+                >
+                    <SafeEmoji emoji={isHeaderCollapsed ? "⚙️" : "✖️"} />
+                </button>
+            )}
+
+            <header style={{ 
+                maxHeight: isHeaderCollapsed ? "0px" : "300px", 
+                opacity: isHeaderCollapsed ? 0 : 1,
+                margin: 0,
+                padding: isHeaderCollapsed ? "0" : "1rem",
+                overflow: "hidden",
+                transition: "all 0.4s cubic-bezier(0.4, 0, 0.2, 1)",
+                flexShrink: 0,
+                background: "var(--color-header-bg)"
+            }}>
+                <div className="header-top" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                        <img src="logo.png" alt="Hemma Logo" style={{ height: '45px', objectFit: 'contain' }} />
-                        <h1 style={{ margin: 0 }}>HEMMA</h1>
+                        <img src="logo.png" alt="Hemma Logo" style={{ height: '40px', objectFit: 'contain' }} />
+                        <h1 style={{ margin: 0, fontSize: "1.8rem" }}>HEMMA</h1>
                         {currentMode === "demo" && (
-                            <span style={{
-                                background: "#ff9800",
-                                color: "white",
-                                padding: "0.2rem 0.6rem",
-                                borderRadius: "4px",
-                                fontSize: "0.8rem",
-                                fontWeight: "bold"
-                            }}>
-                                MODO DEMO
-                            </span>
+                            <span style={{ background: "#ff9800", color: "white", padding: "0.2rem 0.6rem", borderRadius: "4px", fontSize: "0.7rem", fontWeight: "bold" }}>MODO DEMO</span>
                         )}
                     </div>
-                    <button
-                        className="logout-button"
-                        onClick={() => {
-                            setIsAuthenticated(false);
-                            localStorage.removeItem(`pos_authenticated_${currentMode}`);
-                        }}
-                    >
+                    <button className="logout-button" style={{ padding: "0.4rem 0.8rem", fontSize: "0.8rem" }} onClick={() => { setIsAuthenticated(false); localStorage.removeItem(`pos_authenticated_${currentMode}`); }}>
                         Cerrar Sesión
                     </button>
                 </div>
-                <nav>
-                    <button className={activeTab === "pos" ? "active" : ""} onClick={() => setActiveTab("pos")}>
-                        Caja (POS)
-                    </button>
-                    <button className={activeTab === "inventory" ? "active" : ""} onClick={() => setActiveTab("inventory")}>
-                        Inventario
-                    </button>
-                    <button className={activeTab === "performance" ? "active" : ""} onClick={() => setActiveTab("performance")}>
-                        Rendimiento
-                    </button>
-                    <button className={activeTab === "history" ? "active" : ""} onClick={() => setActiveTab("history")}>
-                        Ventas
-                    </button>
-                    <button className={activeTab === "loans" ? "active" : ""} onClick={() => setActiveTab("loans")}>
-                        Créditos
-                    </button>
-                    <button className={activeTab === "ajustes" ? "active" : ""} onClick={() => setActiveTab("ajustes")}>
-                        Ajustes
-                    </button>
+                <nav style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                    <button className={activeTab === "pos" ? "active" : ""} onClick={() => setActiveTab("pos")}>Caja (POS)</button>
+                    <button className={activeTab === "inventory" ? "active" : ""} onClick={() => setActiveTab("inventory")}>Inventario</button>
+                    <button className={activeTab === "performance" ? "active" : ""} onClick={() => setActiveTab("performance")}>Rendimiento</button>
+                    <button className={activeTab === "history" ? "active" : ""} onClick={() => setActiveTab("history")}>Ventas</button>
+                    <button className={activeTab === "loans" ? "active" : ""} onClick={() => setActiveTab("loans")}>Créditos</button>
+                    <button className={activeTab === "ajustes" ? "active" : ""} onClick={() => setActiveTab("ajustes")}>Ajustes</button>
                 </nav>
             </header>
 
-            <main className="container">
+            <main style={{ 
+                flex: 1, 
+                minHeight: 0, 
+                display: "flex", 
+                flexDirection: "column",
+                overflowY: activeTab === "pos" ? "hidden" : "auto" 
+            }}>
                 {activeTab === "pos" && (
-                    <div className="pos-wrapper">
-                        <div style={{
-                            display: "flex",
-                            gap: "0.5rem",
-                            marginBottom: "1rem",
-                            overflowX: "auto",
-                            paddingBottom: "0.5rem"
-                        }}>
-                            {[
-                                { id: "mostrador", label: <><SafeEmoji emoji="🏢" /> Mostrador</> },
-                                { id: "mesa1", label: <><SafeEmoji emoji="🍽️" /> Mesa 1</> },
-                                { id: "mesa2", label: <><SafeEmoji emoji="🍽️" /> Mesa 2</> },
-                                { id: "mesa3", label: <><SafeEmoji emoji="🍽️" /> Mesa 3</> },
-                                { id: "mesa4", label: <><SafeEmoji emoji="🍽️" /> Mesa 4</> }
-                            ].map(table => (
-                                <button
-                                    key={table.id}
-                                    className={activeTable === table.id ? "primary" : "secondary"}
-                                    onClick={() => setActiveTable(table.id)}
-                                    style={{
-                                        display: "flex",
-                                        flexDirection: "column",
-                                        alignItems: "center",
-                                        minWidth: "120px",
-                                        padding: "0.8rem",
-                                        position: "relative"
-                                    }}
-                                >
-                                    <span style={{ fontWeight: "bold" }}>{table.label}</span>
-                                    <span style={{ fontSize: "0.8rem", opacity: 0.9 }}>
-                                        {tables[table.id] && tables[table.id].length > 0
-                                            ? `${tables[table.id].length} items`
-                                            : "Libre"
-                                        }
-                                    </span>
-                                </button>
-                            ))}
-                        </div>
+                    (function () {
+                        // --- 1. PRE-CALCULATE TAB DATA ---
+                        const activeCart = tables[activeTable] || [];
+                        const cartTotal = activeCart.reduce((sum, item) => sum + (item.price * item.cartQuantity), 0);
+                        const salesCount = transactions.reduce((acc, t) => {
+                            if (!t.items) return acc;
+                            t.items.forEach(item => {
+                                const p = products.find(prod => `${prod.name}${prod.isPriceFlexible ? ' (Flexible)' : ''}`.trim() === item.name);
+                                if (p) acc[p.id] = (acc[p.id] || 0) + item.cartQuantity;
+                            });
+                            return acc;
+                        }, {});
+                        const activeCustomerId = selectedCustomerIdByTable[activeTable];
+                        const activeCustomer = customers.find(c => c.id === activeCustomerId);
+                        const activeCustomerPriceType = activeCustomer ? (activeCustomer.type || "special") : "special";
+                        const activeOrderNotes = orderNotesByTable[activeTable];
 
-                        <div className="pos-container">
-                            {(() => {
-                                const activeCustomer = customers.find(c => c.id === activeCustomerId);
-                                const activeCustomerPriceType = activeCustomer?.priceType || "special";
-                                return (
-                                    <ProductCatalog
-                                        products={products}
-                                        categories={categories}
-                                        selectedCustomerId={activeCustomerId}
-                                        customerPriceType={activeCustomerPriceType}
-                                        onAddToCart={handleAddToCart}
-                                        salesCount={salesCount}
-                                    />
-                                );
-                            })()}
-                            <Cart
-                                cart={activeCart}
-                                total={cartTotal}
-                                products={products}
-                                customers={customers}
-                                promotions={promotions}
-                                selectedCustomerId={activeCustomerId}
-                                onSelectCustomer={handleSelectCustomer}
-                                onRemoveFromCart={handleRemoveFromCart}
-                                onUpdateQuantity={handleUpdateQuantity}
-                                onCheckout={handleCheckout}
-                                vendedores={vendedores}
-                                selectedVendedorName={selectedVendedor}
-                                onSelectVendedor={setSelectedVendedor}
-                                onPrint={handlePrint}
-                                orderNotes={activeOrderNotes}
-                                onNotesChange={handleNotesChange}
-                                customTotal={customTotalsByTable[activeTable]}
-                                onCustomTotalChange={(val) => setCustomTotalsByTable(prev => ({ ...prev, [activeTable]: val }))}
-                                paymentMethods={paymentMethods}
-                                onSaveLoan={handleSaveLoan}
-                                splitPaymentEnabled={splitPaymentEnabled}
-                                onToggleSplitPayment={handleToggleSplitPayment}
-                            />
-                        </div>
-                    </div>
+                        return (
+                            <div className="pos-wrapper" style={{ 
+                                flex: 1, 
+                                display: "flex", 
+                                flexDirection: "column", 
+                                minHeight: 0, 
+                                padding: isMobile ? "0.5rem" : "1rem" 
+                            }}>
+                                
+                                {/* --- POS HEADER (Mesa Selector & Search Button) --- */}
+                                {(!isUltraMobile || isAddingMob) && (
+                                    <div style={{
+                                        display: "flex",
+                                        gap: "0.5rem",
+                                        marginBottom: "1rem",
+                                        flexShrink: 0,
+                                        alignItems: "center",
+                                        flexWrap: "wrap"
+                                    }}>
+                                        {/* Responsive Mesa Selector */}
+                                        {isMobile ? (
+                                            <div style={{ flex: 1, minWidth: "150px" }}>
+                                                <select 
+                                                    value={activeTable} 
+                                                    onChange={(e) => setActiveTable(e.target.value)}
+                                                    style={{ width: "100%", padding: "0.8rem", borderRadius: "10px", fontSize: "1rem", fontWeight: "bold", border: "2px solid var(--color-primary)" }}
+                                                >
+                                                    <option value="mostrador">🏢 Mostrador</option>
+                                                    <option value="mesa1">🍽️ Mesa 1</option>
+                                                    <option value="mesa2">🍽️ Mesa 2</option>
+                                                    <option value="mesa3">🍽️ Mesa 3</option>
+                                                    <option value="mesa4">🍽️ Mesa 4</option>
+                                                </select>
+                                            </div>
+                                        ) : (
+                                            [
+                                                { id: "mostrador", label: <><SafeEmoji emoji="🏢" /> Mostrador</> },
+                                                { id: "mesa1", label: <><SafeEmoji emoji="🍽️" /> Mesa 1</> },
+                                                { id: "mesa2", label: <><SafeEmoji emoji="🍽️" /> Mesa 2</> },
+                                                { id: "mesa3", label: <><SafeEmoji emoji="🍽️" /> Mesa 3</> },
+                                                { id: "mesa4", label: <><SafeEmoji emoji="🍽️" /> Mesa 4</> }
+                                            ].map(table => (
+                                                <button
+                                                    key={table.id}
+                                                    className={activeTable === table.id ? "primary" : "secondary"}
+                                                    onClick={() => setActiveTable(table.id)}
+                                                    style={{
+                                                        display: "flex",
+                                                        flexDirection: "column",
+                                                        alignItems: "center",
+                                                        minWidth: "120px",
+                                                        padding: "0.8rem",
+                                                        position: "relative"
+                                                    }}
+                                                >
+                                                    <span style={{ fontWeight: "bold" }}>{table.label}</span>
+                                                    <span style={{ fontSize: "0.8rem", opacity: 0.9 }}>
+                                                        {tables[table.id] && tables[table.id].length > 0
+                                                            ? `${tables[table.id].length} items`
+                                                            : "Libre"
+                                                        }
+                                                    </span>
+                                                </button>
+                                            ))
+                                        )}
+
+                                        {/* Back Button in Mobile Search Mode */}
+                                        {isUltraMobile && isAddingMob && (
+                                            <button 
+                                                onClick={() => setIsAddingMob(false)}
+                                                className="secondary"
+                                                style={{ padding: "0.8rem", borderRadius: "10px", fontWeight: "bold", flex: 1 }}
+                                            >
+                                                ← Volver
+                                            </button>
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* --- MAIN POS CONTENT --- */}
+                                <div className="pos-container" style={{ 
+                                    flex: 1, 
+                                    minHeight: 0,
+                                    display: "flex",
+                                    flexDirection: (isMobile && !isAddingMob) ? "column" : "row",
+                                    overflowY: "hidden"
+                                }}>
+                                    {/* Mobile "BUSCAR" Trigger */}
+                                    {isUltraMobile && !isAddingMob && (
+                                        <button 
+                                            onClick={() => setIsAddingMob(true)}
+                                            style={{
+                                                width: "100%", padding: "1.2rem", background: "var(--color-primary)", color: "white", 
+                                                borderRadius: "12px", border: "none", fontSize: "1.1rem", fontWeight: "bold", 
+                                                marginBottom: "1rem", boxShadow: "0 4px 10px rgba(0,0,0,0.1)"
+                                            }}
+                                        >
+                                            🔍 BUSCAR PRODUCTOS ({activeTable === 'mostrador' ? 'Mostrador' : `Mesa ${activeTable.slice(-1)}`})
+                                        </button>
+                                    )}
+
+                                    {/* Catalog Area (Visible unless in ultra-mobile and not in search mode) */}
+                                    {(!isUltraMobile || isAddingMob) && (
+                                        <div style={{ 
+                                            flex: isUltraMobile ? "none" : 1.8, 
+                                            minHeight: 0, 
+                                            overflowY: "auto",
+                                            display: (isUltraMobile && !isAddingMob) ? "none" : "block"
+                                        }}>
+                                            <ProductCatalog
+                                                products={products}
+                                                categories={categories}
+                                                selectedCustomerId={activeCustomerId}
+                                                customerPriceType={activeCustomerPriceType}
+                                                onAddToCart={handleAddToCart}
+                                                salesCount={salesCount}
+                                                layoutMode={isUltraMobile ? "list" : "grid"}
+                                            />
+                                        </div>
+                                    )}
+
+                                    {/* Cart Area (Visible unless in ultra-mobile search mode) */}
+                                    {(!isUltraMobile || !isAddingMob) && (
+                                        <Cart
+                                            cart={activeCart}
+                                            total={cartTotal}
+                                            products={products}
+                                            customers={customers}
+                                            promotions={promotions}
+                                            selectedCustomerId={activeCustomerId}
+                                            onSelectCustomer={handleSelectCustomer}
+                                            onRemoveFromCart={handleRemoveFromCart}
+                                            onUpdateQuantity={handleUpdateQuantity}
+                                            onCheckout={handleCheckout}
+                                            vendedores={vendedores}
+                                            selectedVendedorName={selectedVendedor}
+                                            onSelectVendedor={setSelectedVendedor}
+                                            onPrint={handlePrint}
+                                            orderNotes={activeOrderNotes}
+                                            onNotesChange={handleNotesChange}
+                                            customTotal={customTotalsByTable[activeTable]}
+                                            onCustomTotalChange={(val) => setCustomTotalsByTable(prev => ({ ...prev, [activeTable]: val }))}
+                                            paymentMethods={paymentMethods}
+                                            onSaveLoan={handleSaveLoan}
+                                            splitPaymentEnabled={splitPaymentEnabled}
+                                            onToggleSplitPayment={handleToggleSplitPayment}
+                                        />
+                                    )}
+                                </div>
+                            </div>
+                        );
+                    })()
                 )}
 
                 {activeTab === "loans" && (

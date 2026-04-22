@@ -188,9 +188,46 @@ nav button.active {
 }
 
 .pos-container {
-  display: grid;
-  grid-template-columns: 2fr 1fr;
-  gap: 2rem;
+  display: flex;
+  gap: 1.5rem;
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+}
+
+/* Responsividad para POS Dashboard */
+@media (max-width: 992px) {
+  .pos-container {
+    flex-direction: column;
+    overflow-y: auto; /* Permite scroll general en tablet/móvil si es necesario */
+    height: auto;
+  }
+  
+  .cart-sidebar {
+    width: 100% !important;
+    height: auto !important;
+    min-height: 500px;
+    margin-top: 1rem;
+  }
+  
+  .app {
+    height: auto !important;
+    overflow: auto !important;
+  }
+}
+
+@media (max-width: 600px) {
+  .pos-wrapper {
+    padding: 0.5rem !important;
+  }
+  
+  .pos-container {
+    gap: 0.8rem;
+  }
+
+  .product-grid {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)) !important;
+  }
 }
 
 @keyframes fadeIn {
@@ -358,5 +395,58 @@ nav button.active {
   .toast,
   .modal-overlay {
     display: none !important;
+  }
+}
+
+/* --- RESPONSIVE UTILITIES --- */
+.mobile-only {
+  display: none !important;
+}
+
+@media (max-width: 768px) {
+  .desktop-only {
+    display: none !important;
+  }
+  .mobile-only {
+    display: block !important;
+  }
+}
+
+/* --- INVENTORY RESPONSIVE --- */
+.inventory-grid-mobile {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+  padding: 0.5rem 0;
+}
+
+.inventory-card-mob {
+  border: 1px solid #eee;
+  padding: 1rem !important;
+  transition: transform 0.2s;
+}
+
+.inventory-card-mob:active {
+  transform: scale(0.98);
+}
+
+/* --- LIST VIEW HOVERS (ProductCatalog) --- */
+.list-item-hover:hover {
+  background: #f0f4ff !important;
+  border-color: var(--color-primary-hover) !important;
+}
+
+.list-item-hover:active {
+  transform: scale(0.99);
+}
+
+/* --- POS TABS RESPONSIVE --- */
+@media (max-width: 600px) {
+  .pos-wrapper {
+    padding: 0.5rem !important;
+  }
+  
+  .pos-container {
+    padding-top: 0.5rem;
   }
 }

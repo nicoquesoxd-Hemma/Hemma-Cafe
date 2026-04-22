@@ -188,91 +188,77 @@ function Cart({
 
     return (
         <>
-        <div className="card" style={{ 
-            position: "sticky", 
-            top: "1rem", 
-            alignSelf: "start", 
-            maxHeight: "calc(100vh - 2rem)", 
-            overflowY: "auto",
+        <div className="card cart-sidebar" style={{ 
+            height: "100%", 
             display: "flex",
-            flexDirection: "column"
+            flexDirection: "column",
+            overflow: "hidden", // LOCKED ROOT SCROLL
+            padding: "0.75rem",
+            flexShrink: 0
         }}>
-            <h2 style={{ color: "var(--color-primary)", marginBottom: "1rem" }}>Orden Actual</h2>
+            <h4 style={{ color: "var(--color-primary)", marginBottom: "0.5rem", fontSize: "1rem" }}>Orden Actual</h4>
 
-            {/* Vendedor Selection */}
-            <div style={{ marginBottom: "1rem" }}>
-                <label style={{ display: "block", fontSize: "0.8rem", marginBottom: "0.3rem", color: "#555", fontWeight: "600" }}>
-                    Vendedor *
-                </label>
-                <select
-                    value={selectedVendedorName}
-                    onChange={(e) => onSelectVendedor(e.target.value)}
-                    style={{ width: "100%", padding: "0.5rem", borderRadius: "8px", border: "2px solid var(--color-primary)", boxSizing: "border-box" }}
-                >
-                    <option value="">Seleccionar Vendedor</option>
-                    {vendedores.map((v) => (
-                        <option key={v.id} value={v.name}>{v.name}</option>
-                    ))}
-                </select>
+            {/* Selectors Row: Vendedor and Cliente side by side */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem", marginBottom: "0.6rem", flexShrink: 0 }}>
+                <div>
+                    <label style={{ display: "block", fontSize: "0.7rem", marginBottom: "0.15rem", color: "#666", fontWeight: "700" }}>Vendedor *</label>
+                    <select
+                        value={selectedVendedorName}
+                        onChange={(e) => onSelectVendedor(e.target.value)}
+                        style={{ width: "100%", padding: "0.3rem", borderRadius: "6px", border: "1.5px solid var(--color-primary)", fontSize: "0.85rem", boxSizing: "border-box" }}
+                    >
+                        <option value="">Seleccionar</option>
+                        {vendedores.map((v) => <option key={v.id} value={v.name}>{v.name}</option>)}
+                    </select>
+                </div>
+                <div>
+                    <label style={{ display: "block", fontSize: "0.7rem", marginBottom: "0.15rem", color: "#666", fontWeight: "700" }}>Cliente</label>
+                    <select
+                        value={selectedCustomerId}
+                        onChange={(e) => onSelectCustomer(e.target.value)}
+                        style={{ width: "100%", padding: "0.3rem", borderRadius: "6px", border: "1px solid #ccc", fontSize: "0.85rem", boxSizing: "border-box" }}
+                    >
+                        <option value="">Público General</option>
+                        {customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                </div>
             </div>
 
-            {/* Cliente Selection */}
-            <div style={{ marginBottom: "1rem" }}>
-                <label style={{ display: "block", fontSize: "0.8rem", marginBottom: "0.3rem", color: "#555", fontWeight: "600" }}>
-                    Cliente
-                </label>
-                <select
-                    value={selectedCustomerId}
-                    onChange={(e) => onSelectCustomer(e.target.value)}
-                    style={{ width: "100%", padding: "0.5rem", borderRadius: "8px", border: "1px solid #ccc", boxSizing: "border-box" }}
-                >
-                    <option value="">Público General</option>
-                    {customers.map((c) => (
-                        <option key={c.id} value={c.id}>{c.name}</option>
-                    ))}
-                </select>
-                {selectedCustomerId && (
-                    <div style={{ fontSize: "0.75rem", color: customerPriceType === "wholesale" ? "#4527a0" : customerPriceType === "general" ? "#757575" : "#E91E63", marginTop: "0.3rem", fontWeight: "600" }}>
-                        {customerPriceType === "wholesale" ? (
-                            <><SafeEmoji emoji="🏦" /> Precios mayoristas aplicados</>
-                        ) : customerPriceType === "general" ? (
-                            <><SafeEmoji emoji="👤" /> Precios generales aplicados</>
-                        ) : (
-                            <><SafeEmoji emoji="⭐" /> Precios especiales aplicados</>
-                        )}
-                    </div>
-                )}
-            </div>
+            {selectedCustomerId && (
+                <div style={{ fontSize: "0.65rem", padding: "0.1rem 0.3rem", borderRadius: "4px", background: "#f5f5f5", marginBottom: "0.6rem", textAlign: "center", fontWeight: "600", color: customerPriceType === "wholesale" ? "#4527a0" : customerPriceType === "general" ? "#757575" : "#E91E63", flexShrink: 0 }}>
+                    {customerPriceType === "wholesale" ? "Mayorista" : customerPriceType === "general" ? "General" : "Especial"}
+                </div>
+            )}
 
             {cart.length === 0 ? (
-                <p>No hay artículos en el carrito</p>
+                <p style={{ flexShrink: 0 }}>No hay artículos en el carrito</p>
             ) : (
-                <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
-                    {/* Cart Items */}
-                    <div style={{ flex: 1, maxHeight: "50vh", overflowY: "auto", marginBottom: "1rem" }}>
+                <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
+                    {/* Cart Items - THE ONLY SCROLLABLE PART */}
+                    <div style={{ flex: 1, overflowY: "auto", marginBottom: "0.5rem", minHeight: 0, paddingRight: "0.2rem" }}>
                         {cart.map((item) => (
                             <div
                                 key={item.id}
                                 className="cart-item"
-                                style={{ marginBottom: "1.2rem", paddingBottom: "0.8rem", borderBottom: "1px solid #eee" }}
+                                style={{ marginBottom: "0.5rem", paddingBottom: "0.4rem", borderBottom: "1px solid #f0f0f0" }}
                             >
-                                <div style={{ marginBottom: "0.5rem", display: "flex", flexWrap: "wrap", alignItems: "baseline", gap: "0.4rem" }}>
-                                    <span style={{ fontWeight: "600", fontSize: "0.95rem" }}>{item.name}</span>
+                                <div style={{ marginBottom: "0.2rem", display: "flex", flexWrap: "wrap", alignItems: "baseline", gap: "0.3rem" }}>
+                                    <span style={{ fontWeight: "600", fontSize: "0.85rem" }}>{item.name}</span>
                                     {getItemSubtitle(item) && (
-                                        <span style={{ fontSize: "0.75rem", color: "#E91E63", fontWeight: "bold" }}>
+                                        <span style={{ fontSize: "0.65rem", color: "#E91E63", fontWeight: "bold" }}>
                                             {getItemSubtitle(item)}
                                         </span>
                                     )}
                                 </div>
                                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                                    <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
-                                        <button onClick={() => onUpdateQuantity(item.id, -1)} style={{ width: "20px", height: "20px", borderRadius: "50%", border: "1px solid #ccc", background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.8rem", color: "#666" }}>-</button>
-                                        <span style={{ minWidth: "18px", textAlign: "center", fontWeight: "500", fontSize: "0.9rem" }}>{item.cartQuantity}</span>
-                                        <button onClick={() => onUpdateQuantity(item.id, 1)} style={{ width: "20px", height: "20px", borderRadius: "50%", border: "1px solid #ccc", background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.8rem", color: "#666" }}>+</button>
+                                    <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                                        <button onClick={() => onUpdateQuantity(item.id, -1)} style={{ width: "18px", height: "18px", borderRadius: "50%", border: "1px solid #ccc", background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.7rem", color: "#666" }}>-</button>
+                                        <span style={{ minWidth: "16px", textAlign: "center", fontWeight: "500", fontSize: "0.8rem" }}>{item.cartQuantity}</span>
+                                        <button onClick={() => onUpdateQuantity(item.id, 1)} style={{ width: "18px", height: "18px", borderRadius: "50%", border: "1px solid #ccc", background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.7rem", color: "#666" }}>+</button>
                                     </div>
-                                    <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
-                                        <span style={{ fontWeight: "600", color: "#444", fontSize: "0.9rem" }}>{formatCurrency(getItemSubtotal(item))}</span>
-                                        <button onClick={() => onRemoveFromCart(item.id)} style={{ color: "#ff4d4d", background: "none", border: "none", cursor: "pointer", fontSize: "1.1rem", fontWeight: "bold" }}>×</button>
+                                    <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+                                        <span style={{ fontWeight: "700", color: "#333", fontSize: "0.8rem" }}>{formatCurrency(getItemSubtotal(item))}</span>
+                                        <button onClick={() => onRemoveFromCart(item.id)} style={{ color: "#ff4d4d", background: "none", border: "none", cursor: "pointer", fontSize: "1rem", fontWeight: "bold" }}>×</button>
                                     </div>
                                 </div>
                             </div>
@@ -280,46 +266,38 @@ function Cart({
                     </div>
 
                     {/* ── INLINE CHECKOUT AREA ── */}
-                    <div style={{ marginTop: "auto", borderTop: "2px solid #eee", paddingTop: "0.8rem", display: "flex", flexDirection: "column", gap: "0.6rem" }}>
+                    <div style={{ marginTop: "auto", borderTop: "1px solid #ddd", paddingTop: "0.5rem", display: "flex", flexDirection: "column", gap: "0.4rem", flexShrink: 0 }}>
                         
-                        {/* Custom Total (Discount) */}
-                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                            <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.8rem", fontWeight: "600", color: "#666", cursor: "pointer", flex: 1 }}>
-                                <input type="checkbox" checked={customTotal !== null} onChange={(e) => onCustomTotalChange(e.target.checked ? "" : null)} style={{ width: "16px", height: "16px", margin: 0 }} />
-                                <span><SafeEmoji emoji="🏷️" /> Descuento Especial</span>
+                        {/* Status Toggles Row (Discount & Split) */}
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.4rem" }}>
+                            <label style={{ display: "flex", alignItems: "center", gap: "0.2rem", fontSize: "0.7rem", fontWeight: "600", color: "#444", cursor: "pointer", border: "1px solid #eee", padding: "0.2rem", borderRadius: "4px" }}>
+                                <input type="checkbox" checked={customTotal !== null} onChange={(e) => onCustomTotalChange(e.target.checked ? "" : null)} style={{ width: "14px", height: "14px", margin: 0 }} />
+                                <span>Dscto.</span>
                             </label>
-                            {customTotal !== null && (
-                                <input type="number" placeholder="Precio final..." value={customTotal} onChange={(e) => onCustomTotalChange(e.target.value)} style={{ flex: 1, padding: "0.4rem", borderRadius: "6px", border: "1px solid var(--color-primary)", fontSize: "0.9rem", fontWeight: "700", minWidth: "100px" }} />
-                            )}
-                        </div>
-
-                        {/* Split Payment Toggle */}
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.4rem 0.6rem", background: splitPaymentEnabled ? "#e0f7fa" : "#f1f3f4", borderRadius: "8px", border: `1px solid ${splitPaymentEnabled ? "#0097a7" : "#eee"}` }}>
-                            <div style={{ fontWeight: "700", color: splitPaymentEnabled ? "#006064" : "#555", fontSize: "0.85rem" }}>
-                                <SafeEmoji emoji="🔀" /> Pago dividido
-                            </div>
-                            <label style={{ position: "relative", display: "inline-block", width: "40px", height: "22px", cursor: "pointer", margin: 0 }}>
-                                <input type="checkbox" checked={!!splitPaymentEnabled} onChange={(e) => onToggleSplitPayment(e.target.checked)} style={{ opacity: 0, width: 0, height: 0 }} />
-                                <span style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, background: splitPaymentEnabled ? "#0097a7" : "#ccc", borderRadius: "24px", transition: "0.3s" }} />
-                                <span style={{ position: "absolute", height: "16px", width: "16px", left: splitPaymentEnabled ? "21px" : "3px", bottom: "3px", background: "white", borderRadius: "50%", transition: "0.3s" }} />
+                            <label style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.2rem", background: splitPaymentEnabled ? "#e0f7fa" : "#f1f3f4", borderRadius: "4px", border: `1px solid ${splitPaymentEnabled ? "#0097a7" : "#eee"}`, cursor: "pointer" }}>
+                                <span style={{ fontWeight: "700", color: splitPaymentEnabled ? "#006064" : "#666", fontSize: "0.7rem" }}>Dividir</span>
+                                <input type="checkbox" checked={!!splitPaymentEnabled} onChange={(e) => onToggleSplitPayment(e.target.checked)} style={{ width: "14px", height: "14px", margin: 0 }} />
                             </label>
                         </div>
+                        {customTotal !== null && (
+                            <input type="number" placeholder="Total acordado..." value={customTotal} onChange={(e) => onCustomTotalChange(e.target.value)} style={{ width: "100%", padding: "0.3rem", borderRadius: "4px", border: "1px solid var(--color-primary)", fontSize: "0.85rem", fontWeight: "700" }} />
+                        )}
 
                         {/* ── SINGLE MODE ── */}
                         {!splitPaymentEnabled && (
-                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.6rem" }}>
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.4rem" }}>
                                 <div>
-                                    <label style={{ display: "block", fontSize: "0.75rem", marginBottom: "0.2rem", fontWeight: "600", color: "#555" }}>Paga con ($)</label>
-                                    <input type="number" placeholder="Monto recib..." value={paymentAmount} onChange={(e) => setPaymentAmount(e.target.value)} style={{ width: "100%", padding: "0.6rem", borderRadius: "8px", border: "1px solid #ddd", fontSize: "1rem", fontWeight: "bold", color: "var(--color-primary)", boxSizing: "border-box" }} />
+                                    <label style={{ display: "block", fontSize: "0.65rem", marginBottom: "0.1rem", fontWeight: "700", color: "#666" }}>Recibido $</label>
+                                    <input type="number" placeholder="Monto" value={paymentAmount} onChange={(e) => setPaymentAmount(e.target.value)} style={{ width: "100%", padding: "0.3rem", borderRadius: "4px", border: "1px solid #ddd", fontSize: "0.85rem", fontWeight: "bold", boxSizing: "border-box" }} />
                                 </div>
                                 <div>
-                                    <label style={{ display: "block", fontSize: "0.75rem", marginBottom: "0.2rem", fontWeight: "600", color: "#555" }}>Método</label>
+                                    <label style={{ display: "block", fontSize: "0.65rem", marginBottom: "0.1rem", fontWeight: "700", color: "#666" }}>Método</label>
                                     <select value={paymentMethod} onChange={(e) => {
                                         const val = e.target.value;
                                         setPaymentMethod(val);
                                         if (val === "Servicio") { onCustomTotalChange(0); setPaymentAmount(0); }
                                         else if (paymentMethod === "Servicio") { onCustomTotalChange(null); }
-                                    }} style={{ width: "100%", padding: "0.6rem", borderRadius: "8px", border: "1px solid #ddd", fontSize: "0.9rem", fontWeight: "bold", boxSizing: "border-box" }}>
+                                    }} style={{ width: "100%", padding: "0.3rem", borderRadius: "4px", border: "1px solid #ddd", fontSize: "0.8rem", fontWeight: "bold", boxSizing: "border-box" }}>
                                         {availableMethods.map(pm => (
                                             <option key={pm.id} value={pm.name}>{pm.emoji && isEmojiSupported(pm.emoji) ? `${pm.emoji} ` : ""}{pm.name}</option>
                                         ))}
@@ -357,24 +335,24 @@ function Cart({
 
                         {/* Notes */}
                         <div>
-                            <textarea placeholder="Notas (opcional)..." value={orderNotes || ""} onChange={(e) => onNotesChange && onNotesChange(e.target.value)} style={{ width: "100%", padding: "0.5rem", borderRadius: "8px", border: "1px solid #ddd", minHeight: "45px", fontSize: "0.85rem", resize: "vertical", boxSizing: "border-box" }} />
+                            <textarea placeholder="Notas..." value={orderNotes || ""} onChange={(e) => onNotesChange && onNotesChange(e.target.value)} style={{ width: "100%", padding: "0.3rem", borderRadius: "4px", border: "1px solid #ddd", minHeight: "28px", fontSize: "0.75rem", resize: "none", boxSizing: "border-box" }} />
                         </div>
 
                         {/* Total Summary */}
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "#f8f9fa", padding: "0.6rem 0.8rem", borderRadius: "8px", border: "1px solid #eee" }}>
-                            <span style={{ fontSize: "1.1rem", fontWeight: "bold", color: "#555" }}>Total:</span>
-                            <span style={{ fontSize: "1.4rem", fontWeight: "900", color: "var(--color-primary)" }}>{formatCurrency(total)}</span>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "#f8f9fa", padding: "0.4rem 0.6rem", borderRadius: "6px", border: "1px solid #eee" }}>
+                            <span style={{ fontSize: "0.9rem", fontWeight: "bold", color: "#666" }}>Total:</span>
+                            <span style={{ fontSize: "1.2rem", fontWeight: "900", color: "var(--color-primary)" }}>{formatCurrency(total)}</span>
                         </div>
 
                         {/* Action Buttons */}
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem" }}>
-                            <button onClick={() => onPrint({ date: new Date().toISOString(), customerName: selectedCustomerName || "General", vendedorName: selectedVendedorName, paymentMethod: splitPaymentEnabled ? "Múltiple" : paymentMethod, total, items: cart.map(i => ({ name: `${i.name} ${getItemSubtitle(i) || ""}`.trim(), cartQuantity: i.cartQuantity, subtotal: getItemSubtotal(i) })) })} style={{ padding: "0.7rem", background: "#f5f5f5", borderRadius: "8px", border: "1px solid #ddd", color: "#333", fontWeight: "bold", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.3rem", fontSize: "0.85rem" }}>
-                                <SafeEmoji emoji="🖨️" /> Ticket
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.4rem" }}>
+                            <button onClick={() => onPrint({ date: new Date().toISOString(), customerName: selectedCustomerName || "General", vendedorName: selectedVendedorName, paymentMethod: splitPaymentEnabled ? "Múltiple" : paymentMethod, total, items: cart.map(i => ({ name: `${i.name} ${getItemSubtitle(i) || ""}`.trim(), cartQuantity: i.cartQuantity, subtotal: getItemSubtotal(i) })) })} style={{ padding: "0.5rem", background: "#f5f5f5", borderRadius: "6px", border: "1px solid #ddd", color: "#333", fontWeight: "bold", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.2rem", fontSize: "0.75rem" }}>
+                                Ticket
                             </button>
-                            <button disabled={!selectedCustomerId} onClick={() => { onSaveLoan(selectedCustomerName, selectedVendedorName, orderNotes); }} style={{ padding: "0.7rem", background: selectedCustomerId ? "#f57f17" : "#eee", borderRadius: "8px", border: "none", color: selectedCustomerId ? "white" : "#999", fontWeight: "bold", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.3rem", fontSize: "0.85rem" }}>
-                                <SafeEmoji emoji="🤝" /> Crédito
+                            <button disabled={!selectedCustomerId} onClick={() => { onSaveLoan(selectedCustomerName, selectedVendedorName, orderNotes); }} style={{ padding: "0.5rem", background: selectedCustomerId ? "#f57f17" : "#eee", borderRadius: "6px", border: "none", color: selectedCustomerId ? "white" : "#999", fontWeight: "bold", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.2rem", fontSize: "0.75rem" }}>
+                                Crédito
                             </button>
-                            <button className="primary" onClick={handleCheckout} disabled={checkoutDisabled} style={{ gridColumn: "span 2", padding: "0.9rem", fontSize: "1.1rem", fontWeight: "bold", textTransform: "uppercase", borderRadius: "8px", boxShadow: "0 4px 12px rgba(182, 216, 44, 0.4)" }}>
+                            <button className="primary" onClick={handleCheckout} disabled={checkoutDisabled} style={{ gridColumn: "span 2", padding: "0.7rem", fontSize: "1rem", fontWeight: "bold", textTransform: "uppercase", borderRadius: "6px" }}>
                                 Confirmar Cobro
                             </button>
                         </div>

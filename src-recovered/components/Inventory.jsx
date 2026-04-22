@@ -403,8 +403,9 @@ function Inventory({
                     </select>
                 </div>
 
-                <div style={{ overflowX: "auto" }}>
-                    <table className="history-table" style={{ width: "100%" }}>
+                <div className="inventory-responsive-container">
+                    {/* --- DESKTOP TABLE VIEW --- */}
+                    <table className="inventory-table desktop-only" style={{ width: "100%" }}>
                         <thead>
                             <tr style={{ textAlign: "left", borderBottom: "2px solid #eee" }}>
                                 <th style={{ padding: "0.8rem 0.5rem" }}>Img</th>
@@ -478,6 +479,45 @@ function Inventory({
                             ))}
                         </tbody>
                     </table>
+
+                    {/* --- MOBILE CARD VIEW --- */}
+                    <div className="mobile-only inventory-grid-mobile">
+                        {sortedProducts.map((p) => (
+                            <div key={p.id} className="card inventory-card-mob">
+                                <div style={{ display: "flex", gap: "1rem", marginBottom: "0.8rem" }}>
+                                    <div style={{ width: "60px", height: "60px", background: "#f5f5f5", borderRadius: "8px", overflow: "hidden", flexShrink: 0 }}>
+                                        {p.image ? <img src={p.image} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", fontSize: "1.5rem" }}>📦</div>}
+                                    </div>
+                                    <div style={{ flex: 1 }}>
+                                        <h4 style={{ margin: 0, fontSize: "1.1rem" }}>{p.name}</h4>
+                                        <span style={{ fontSize: "0.8rem", color: "#888" }}>{categories.find(c => c.id === p.categoryId)?.name || "Sin Categoría"}</span>
+                                    </div>
+                                    <div style={{ textAlign: "right" }}>
+                                        <div style={{ fontSize: "0.8rem", color: "#888" }}>Stock</div>
+                                        <div style={{ fontWeight: "bold", color: p.quantity <= 5 ? "red" : "#333", fontSize: "1.2rem" }}>{p.quantity}</div>
+                                    </div>
+                                </div>
+                                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.5rem", padding: "0.8rem", background: "#f9f9f9", borderRadius: "8px", marginBottom: "1rem" }}>
+                                    <div>
+                                        <div style={{ fontSize: "0.7rem", color: "#888" }}>Normal</div>
+                                        <div style={{ fontWeight: "bold", fontSize: "0.9rem" }}>${p.price.toLocaleString()}</div>
+                                    </div>
+                                    <div>
+                                        <div style={{ fontSize: "0.7rem", color: "var(--color-primary)" }}>Especial</div>
+                                        <div style={{ fontWeight: "bold", fontSize: "0.9rem", color: "var(--color-primary)" }}>{p.specialPrice ? `$${p.specialPrice.toLocaleString()}` : "-"}</div>
+                                    </div>
+                                    <div>
+                                        <div style={{ fontSize: "0.7rem", color: "#6a1b9a" }}>Mayorista</div>
+                                        <div style={{ fontWeight: "bold", fontSize: "0.9rem", color: "#6a1b9a" }}>{p.wholesalePrice ? `$${p.wholesalePrice.toLocaleString()}` : "-"}</div>
+                                    </div>
+                                </div>
+                                <div style={{ display: "flex", gap: "0.5rem" }}>
+                                    <button onClick={() => handleEditProduct(p)} style={{ flex: 1, padding: "0.8rem", background: "#f0f4ff", color: "#1565c0", border: "1px solid #d0dfff", borderRadius: "8px", fontWeight: "bold" }}>Editar</button>
+                                    <button onClick={() => showConfirm("¿Estás seguro?").then(c => c && onDeleteProduct(p.id))} className="danger" style={{ flex: 1, padding: "0.8rem" }}>Borrar</button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
                 </div>
             </CollapsibleCard>
 

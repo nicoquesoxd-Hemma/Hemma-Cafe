@@ -1,7 +1,7 @@
 {
   "name": "hemmacafe-pos",
   "private": true,
-  "version": "1.1.7",
+  "version": "1.1.9",
   "type": "module",
   "repository": {
     "type": "git",
@@ -34,6 +34,10 @@
       }
     ],
     "nsis": {
+      "oneClick": true,
+      "allowToChangeInstallationDirectory": false,
+      "deleteAppDataOnUninstall": false,
+      "perMachine": false,
       "artifactName": "Hemma-POS-Setup-${version}.${ext}"
     },
     "win": {
