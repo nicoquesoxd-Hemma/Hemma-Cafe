@@ -287,13 +287,22 @@ function Loans({ loans, onLoanPayment, paymentMethods, vendedores }) {
                                                                             </thead>
                                                                             <tbody>
                                                                                 {trans.items.map(item => (
-                                                                                    <tr key={item.id} style={{ borderBottom: "1px solid #f5f5f5" }}>
+                                                                                    <tr 
+                                                                                        key={item.id} 
+                                                                                        style={{ borderBottom: "1px solid #f5f5f5", cursor: "pointer" }}
+                                                                                        onClick={() => handleItemToggle(trans.id, item.id, item.cartQuantity)}
+                                                                                    >
                                                                                         <td style={{ padding: "0.6rem 1rem" }}>
-                                                                                            <input type="checkbox" style={{ accentColor: "var(--color-primary)" }} checked={!!paymentItems[`${trans.id}_${item.id}`]} onChange={() => handleItemToggle(trans.id, item.id, item.cartQuantity)} />
+                                                                                            <input 
+                                                                                                type="checkbox" 
+                                                                                                style={{ accentColor: "var(--color-primary)" }} 
+                                                                                                checked={!!paymentItems[`${trans.id}_${item.id}`]} 
+                                                                                                onChange={() => {}} // Se maneja por el onClick de la fila
+                                                                                            />
                                                                                         </td>
                                                                                         <td style={{ padding: "0.6rem 1rem", fontWeight: "600" }}>{item.name}</td>
                                                                                         <td style={{ padding: "0.6rem 1rem", textAlign: "center", color: "#666" }}>x{item.cartQuantity}</td>
-                                                                                        <td style={{ padding: "0.6rem 1rem", textAlign: "center" }}>
+                                                                                        <td style={{ padding: "0.6rem 1rem", textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
                                                                                             {paymentItems[`${trans.id}_${item.id}`] ? (
                                                                                                 <input type="number" min="1" max={item.cartQuantity} value={paymentItems[`${trans.id}_${item.id}`]} onChange={(e) => handleQtyChange(trans.id, item.id, e.target.value, item.cartQuantity)} style={{ width: "40px", padding: "2px", border: "1px solid var(--color-primary)", borderRadius: "4px", textAlign: "center" }} />
                                                                                             ) : "-"}
