@@ -14,7 +14,7 @@ import Loans from "./components/Loans";
 import { useApp } from "./context/AppProvider";
 
 function App() {
-    const { showToast } = useApp();
+    const { showToast, showConfirm } = useApp();
     const [currentMode, setCurrentMode] = useState(
         () => localStorage.getItem("pos_mode") || "production"
     );
@@ -258,6 +258,9 @@ function App() {
 
     const activeOrderNotes = orderNotesByTable[activeTable] || "";
     const handleNotesChange = (val) => setOrderNotesByTable(prev => ({ ...prev, [activeTable]: val }));
+
+    const activeCustomer = useMemo(() => customers.find(c => c.id === activeCustomerId), [customers, activeCustomerId]);
+    const activeCustomerPriceType = activeCustomer?.priceType || "special";
 
     const handleAddToCart = (product) => {
         if (product.quantity <= 0) return;
@@ -511,9 +514,17 @@ function App() {
             return;
         }
 
+        const tableToClear = activeTable; // Capturar la mesa actual para asegurar que se limpie la correcta
+
         try {
             const customerId = activeCustomerId;
             const batch = writeBatch(db);
+
+            const activeCart = tables[tableToClear] || [];
+            if (activeCart.length === 0) {
+                showToast("El carrito está vacío", "warning");
+                return;
+            }
 
             // 1. Preparar los items para ESTA transacción específica
             const transactionItems = activeCart.map(item => {
@@ -530,21 +541,28 @@ function App() {
                     }
                 }
 
-                // Aplicar precios de promoción si existen
+                // Apply Promotions
                 const promo = promotions.find(p => p.productId === item.id);
-                let effectivePrice = basePrice;
+                let itemTotal = basePrice * item.cartQuantity;
                 if (promo && item.cartQuantity >= promo.quantity) {
                     if (promo.type === "bulk") {
-                        effectivePrice = promo.price;
+                        itemTotal = promo.price * item.cartQuantity;
+                    } else {
+                        const promoCount = Math.floor(item.cartQuantity / promo.quantity);
+                        const extraCount = item.cartQuantity % promo.quantity;
+                        itemTotal = promoCount * promo.price + extraCount * basePrice;
                     }
                 }
+
+                // Calculate an "effective unit price" for the record, though subtotal is what matters
+                const effectivePrice = item.cartQuantity > 0 ? (itemTotal / item.cartQuantity) : basePrice;
 
                 return {
                     id: item.id,
                     name: item.name,
                     price: effectivePrice,
                     cartQuantity: item.cartQuantity,
-                    subtotal: effectivePrice * item.cartQuantity,
+                    subtotal: itemTotal,
                     dateAdded: new Date().toISOString()
                 };
             });
@@ -574,11 +592,11 @@ function App() {
 
             await batch.commit();
 
-            // 4. Limpiar estado de la interfaz
-            setTables(prev => ({ ...prev, [activeTable]: [] }));
-            setSelectedCustomerIdByTable(prev => ({ ...prev, [activeTable]: "" }));
-            setOrderNotesByTable(prev => ({ ...prev, [activeTable]: "" }));
-            setCustomTotalsByTable(prev => ({ ...prev, [activeTable]: null }));
+            // 4. Limpiar estado de la interfaz de la mesa capturada
+            setTables(prev => ({ ...prev, [tableToClear]: [] }));
+            setSelectedCustomerIdByTable(prev => ({ ...prev, [tableToClear]: "" }));
+            setOrderNotesByTable(prev => ({ ...prev, [tableToClear]: "" }));
+            setCustomTotalsByTable(prev => ({ ...prev, [tableToClear]: null }));
 
             showToast(`Crédito registrado para ${customerName}`, "success");
         } catch (err) {
@@ -647,6 +665,33 @@ function App() {
         } catch (err) {
             console.error(err);
             showToast("Error al procesar el pago", "error");
+        }
+    };
+
+    const handleRemoveLoanItem = async (loanId, productId) => {
+        try {
+            const loan = loans.find(l => l.id === loanId);
+            if (!loan) return;
+
+            const confirmed = await showConfirm(`¿Estás seguro de eliminar este producto del crédito de ${loan.customerName}?`);
+            if (!confirmed) return;
+
+            const loanRef = doc(db, colName("loans"), loanId);
+            const remainingItems = (loan.items || []).filter(item => item.id !== productId);
+
+            if (remainingItems.length === 0) {
+                await deleteDoc(loanRef);
+                showToast("Crédito eliminado por estar vacío", "success");
+            } else {
+                await updateDoc(loanRef, {
+                    items: remainingItems,
+                    lastUpdated: new Date()
+                });
+                showToast("Producto eliminado del crédito", "success");
+            }
+        } catch (err) {
+            console.error("Error al eliminar producto del crédito:", err);
+            showToast("Error al eliminar el producto", "error");
         }
     };
 
@@ -1110,8 +1155,6 @@ function App() {
                 {activeTab === "pos" && (
                     (function () {
                         // --- 1. PRE-CALCULATE TAB DATA ---
-                        const activeCart = tables[activeTable] || [];
-                        const cartTotal = activeCart.reduce((sum, item) => sum + (item.price * item.cartQuantity), 0);
                         const salesCount = transactions.reduce((acc, t) => {
                             if (!t.items) return acc;
                             t.items.forEach(item => {
@@ -1120,10 +1163,6 @@ function App() {
                             });
                             return acc;
                         }, {});
-                        const activeCustomerId = selectedCustomerIdByTable[activeTable];
-                        const activeCustomer = customers.find(c => c.id === activeCustomerId);
-                        const activeCustomerPriceType = activeCustomer ? (activeCustomer.type || "special") : "special";
-                        const activeOrderNotes = orderNotesByTable[activeTable];
 
                         return (
                             <div className="pos-wrapper" style={{ 
@@ -1283,6 +1322,7 @@ function App() {
                     <Loans
                         loans={loans}
                         onLoanPayment={handleLoanPayment}
+                        onRemoveLoanItem={handleRemoveLoanItem}
                         paymentMethods={paymentMethods}
                         vendedores={vendedores}
                     />

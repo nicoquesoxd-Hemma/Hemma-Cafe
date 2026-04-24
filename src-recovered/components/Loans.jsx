@@ -30,8 +30,8 @@ const formatTime = (loan) => {
     return d.toLocaleTimeString("es-CO", { hour: '2-digit', minute: '2-digit' });
 };
 
-function Loans({ loans, onLoanPayment, paymentMethods, vendedores }) {
-    const { showToast } = useApp();
+function Loans({ loans, onLoanPayment, onRemoveLoanItem, paymentMethods, vendedores }) {
+    const { showToast, showConfirm } = useApp();
     const [expandedCustomerId, setExpandedCustomerId] = React.useState(null);
     const [paymentItems, setPaymentItems] = React.useState({}); // { loanId_productId: quantity }
     const [payMethod, setPayMethod] = React.useState("Efectivo");
@@ -279,38 +279,44 @@ function Loans({ loans, onLoanPayment, paymentMethods, vendedores }) {
                                                                             <thead>
                                                                                 <tr style={{ background: "#f9f9f9", textAlign: "left", color: "#999", fontSize: "0.7rem", textTransform: "uppercase" }}>
                                                                                     <th style={{ padding: "0.5rem 1rem", width: "40px" }}></th>
-                                                                                    <th style={{ padding: "0.5rem 1rem" }}>Producto</th>
-                                                                                    <th style={{ padding: "0.5rem 1rem", textAlign: "center" }}>Cant.</th>
-                                                                                    <th style={{ padding: "0.5rem 1rem", textAlign: "center" }}>Abonar</th>
-                                                                                    <th style={{ padding: "0.5rem 1rem", textAlign: "right" }}>Subtotal</th>
-                                                                                </tr>
-                                                                            </thead>
-                                                                            <tbody>
-                                                                                {trans.items.map(item => (
-                                                                                    <tr 
-                                                                                        key={item.id} 
-                                                                                        style={{ borderBottom: "1px solid #f5f5f5", cursor: "pointer" }}
-                                                                                        onClick={() => handleItemToggle(trans.id, item.id, item.cartQuantity)}
-                                                                                    >
-                                                                                        <td style={{ padding: "0.6rem 1rem" }}>
-                                                                                            <input 
-                                                                                                type="checkbox" 
-                                                                                                style={{ accentColor: "var(--color-primary)" }} 
-                                                                                                checked={!!paymentItems[`${trans.id}_${item.id}`]} 
-                                                                                                onChange={() => {}} // Se maneja por el onClick de la fila
-                                                                                            />
-                                                                                        </td>
-                                                                                        <td style={{ padding: "0.6rem 1rem", fontWeight: "600" }}>{item.name}</td>
-                                                                                        <td style={{ padding: "0.6rem 1rem", textAlign: "center", color: "#666" }}>x{item.cartQuantity}</td>
-                                                                                        <td style={{ padding: "0.6rem 1rem", textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
-                                                                                            {paymentItems[`${trans.id}_${item.id}`] ? (
-                                                                                                <input type="number" min="1" max={item.cartQuantity} value={paymentItems[`${trans.id}_${item.id}`]} onChange={(e) => handleQtyChange(trans.id, item.id, e.target.value, item.cartQuantity)} style={{ width: "40px", padding: "2px", border: "1px solid var(--color-primary)", borderRadius: "4px", textAlign: "center" }} />
-                                                                                            ) : "-"}
-                                                                                        </td>
-                                                                                        <td style={{ padding: "0.6rem 1rem", textAlign: "right", fontWeight: "600" }}>{formatCurrency(item.price * (paymentItems[`${trans.id}_${item.id}`] || item.cartQuantity))}</td>
-                                                                                    </tr>
-                                                                                ))}
-                                                                            </tbody>
+                                                                                     <th style={{ padding: "0.5rem 1rem" }}>Producto</th>
+                                                                                     <th style={{ padding: "0.5rem 1rem", textAlign: "center" }}>Cant.</th>
+                                                                                     <th style={{ padding: "0.5rem 1rem", textAlign: "center" }}>Abonar</th>
+                                                                                     <th style={{ padding: "0.5rem 1rem", textAlign: "right" }}>Subtotal</th>
+                                                                                     <th style={{ padding: "0.5rem 1rem", textAlign: "center", width: "40px" }}></th>
+                                                                                 </tr>
+                                                                             </thead>
+                                                                             <tbody>
+                                                                                 {trans.items.map(item => (
+                                                                                     <tr 
+                                                                                         key={item.id} 
+                                                                                         style={{ borderBottom: "1px solid #f5f5f5", cursor: "pointer" }}
+                                                                                         onClick={() => handleItemToggle(trans.id, item.id, item.cartQuantity)}
+                                                                                     >
+                                                                                         <td style={{ padding: "0.6rem 1rem" }}>
+                                                                                             <input 
+                                                                                                 type="checkbox" 
+                                                                                                 style={{ accentColor: "var(--color-primary)" }} 
+                                                                                                 checked={!!paymentItems[`${trans.id}_${item.id}`]} 
+                                                                                                 onChange={() => {}} // Se maneja por el onClick de la fila
+                                                                                             />
+                                                                                         </td>
+                                                                                         <td style={{ padding: "0.6rem 1rem", fontWeight: "600" }}>{item.name}</td>
+                                                                                         <td style={{ padding: "0.6rem 1rem", textAlign: "center", color: "#666" }}>x{item.cartQuantity}</td>
+                                                                                         <td style={{ padding: "0.6rem 1rem", textAlign: "center" }} onClick={(e) => e.stopPropagation()}>
+                                                                                             {paymentItems[`${trans.id}_${item.id}`] ? (
+                                                                                                 <input type="number" min="1" max={item.cartQuantity} value={paymentItems[`${trans.id}_${item.id}`]} onChange={(e) => handleQtyChange(trans.id, item.id, e.target.value, item.cartQuantity)} style={{ width: "40px", padding: "2px", border: "1px solid var(--color-primary)", borderRadius: "4px", textAlign: "center" }} />
+                                                                                             ) : "-"}
+                                                                                         </td>
+                                                                                         <td style={{ padding: "0.6rem 1rem", textAlign: "right", fontWeight: "600" }}>{formatCurrency(item.price * (paymentItems[`${trans.id}_${item.id}`] || item.cartQuantity))}</td>
+                                                                                         <td style={{ padding: "0.6rem 1rem", textAlign: "center" }} onClick={(e) => { e.stopPropagation(); onRemoveLoanItem(trans.id, item.id); }}>
+                                                                                             <button style={{ background: "none", border: "none", color: "#ff4d4d", cursor: "pointer", fontSize: "1.1rem", padding: "4px", display: "flex", alignItems: "center", justifyContent: "center" }} title="Eliminar del crédito">
+                                                                                                 <SafeEmoji emoji="🗑️" />
+                                                                                             </button>
+                                                                                         </td>
+                                                                                     </tr>
+                                                                                 ))}
+                                                                             </tbody>
                                                                         </table>
                                                                     </div>
                                                                 </div>

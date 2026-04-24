@@ -30,8 +30,6 @@ export function AppProvider({ children }) {
         }
     };
 
-
-
     const icons = {
         success: "✅",
         error: "❌",
