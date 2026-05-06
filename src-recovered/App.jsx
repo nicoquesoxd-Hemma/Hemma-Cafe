@@ -79,6 +79,7 @@ function App() {
     const [loans, setLoans] = useState([]);
     const [isAddingMob, setIsAddingMob] = useState(false); // Ultra-mobile Search Mode
     const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+    const [isProcessing, setIsProcessing] = useState(false);
 
     useEffect(() => {
         const handleResize = () => setWindowWidth(window.innerWidth);
@@ -370,7 +371,8 @@ function App() {
         return counts;
     }, [transactions]);
 
-    const handleCheckout = (customerName, vendedorName, paymentsOrMethod, notes, forcedTotal = null) => {
+    const handleCheckout = async (customerName, vendedorName, paymentsOrMethod, notes, forcedTotal = null) => {
+        setIsProcessing(true);
         const finalTotal = forcedTotal !== null ? forcedTotal : cartTotal;
 
         // paymentsOrMethod can be a string (legacy) or an array [{ method, amount }]
@@ -477,11 +479,7 @@ function App() {
                 });
             });
 
-            // Ejecutamos el commit pero NO lo esperamos (permitiendo funcionamiento offline instantáneo)
-            batch.commit().catch(err => {
-                console.error("Error en la sincronización diferida:", err);
-                showToast("Error crítico al sincronizar datos", "error");
-            });
+            await batch.commit();
 
             // Limpieza inmediata de la interfaz
             setTables(prev => ({
@@ -505,6 +503,8 @@ function App() {
         } catch (err) {
             console.error("Error local al procesar compra:", err);
             showToast("Error al procesar la compra", "error");
+        } finally {
+            setIsProcessing(false);
         }
     };
 
@@ -515,6 +515,7 @@ function App() {
         }
 
         const tableToClear = activeTable; // Capturar la mesa actual para asegurar que se limpie la correcta
+        setIsProcessing(true);
 
         try {
             const customerId = activeCustomerId;
@@ -602,10 +603,13 @@ function App() {
         } catch (err) {
             console.error("Error al guardar crédito:", err);
             showToast("Error al guardar el crédito", "error");
+        } finally {
+            setIsProcessing(false);
         }
     };
 
     const handleLoanPayment = async (loanId, paymentItems, paymentsOrMethod, vendedorName, amount) => {
+        setIsProcessing(true);
         try {
             const loan = loans.find(l => l.id === loanId);
             if (!loan) return;
@@ -665,6 +669,8 @@ function App() {
         } catch (err) {
             console.error(err);
             showToast("Error al procesar el pago", "error");
+        } finally {
+            setIsProcessing(false);
         }
     };
 
@@ -1389,6 +1395,13 @@ function App() {
             <div className="receipt-container-hidden">
                 <Receipt transaction={transactionToPrint} />
             </div>
+
+            {isProcessing && (
+                <div className="processing-overlay">
+                    <div className="spinner"></div>
+                    <p style={{ fontWeight: "700", color: "var(--color-primary)" }}>Procesando pedido...</p>
+                </div>
+            )}
         </div>
     );
 }
