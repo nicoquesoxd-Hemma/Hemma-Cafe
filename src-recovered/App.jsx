@@ -80,6 +80,18 @@ function App() {
     const [isAddingMob, setIsAddingMob] = useState(false); // Ultra-mobile Search Mode
     const [windowWidth, setWindowWidth] = useState(window.innerWidth);
     const [isProcessing, setIsProcessing] = useState(false);
+    const [isOnline, setIsOnline] = useState(navigator.onLine);
+
+    useEffect(() => {
+        const handleOnline = () => setIsOnline(true);
+        const handleOffline = () => setIsOnline(false);
+        window.addEventListener("online", handleOnline);
+        window.addEventListener("offline", handleOffline);
+        return () => {
+            window.removeEventListener("online", handleOnline);
+            window.removeEventListener("offline", handleOffline);
+        };
+    }, []);
 
     useEffect(() => {
         const handleResize = () => setWindowWidth(window.innerWidth);
@@ -374,28 +386,32 @@ function App() {
     const handleCheckout = async (customerName, vendedorName, paymentsOrMethod, notes, forcedTotal = null) => {
         setIsProcessing(true);
         const finalTotal = forcedTotal !== null ? forcedTotal : cartTotal;
+        const currentActiveTable = activeTable;
+        const currentActiveCart = [...activeCart];
+        const currentActiveCustomerId = activeCustomerId;
 
         // paymentsOrMethod can be a string (legacy) or an array [{ method, amount }]
         const paymentsArray = Array.isArray(paymentsOrMethod)
             ? paymentsOrMethod
             : [{ method: paymentsOrMethod, amount: finalTotal }];
         const primaryMethod = paymentsArray[0]?.method || "Efectivo";
+
         try {
             const batch = writeBatch(db);
             const transRef = doc(collection(db, colName("transactions")));
 
-            const isCustomTotal = customTotalsByTable[activeTable] !== null && customTotalsByTable[activeTable] !== undefined && customTotalsByTable[activeTable] !== "";
+            const isCustomTotal = customTotalsByTable[currentActiveTable] !== null && customTotalsByTable[currentActiveTable] !== undefined && customTotalsByTable[currentActiveTable] !== "";
             const isServicio = primaryMethod === "Servicio";
             const finalNotes = (isCustomTotal && !isServicio)
                 ? (notes ? `${notes} (Descuento personalizado)` : "Descuento personalizado")
                 : notes;
 
-            const preCustomTotal = activeCart.reduce((sum, item) => {
-                const activeCustomer = customers.find(c => c.id === activeCustomerId);
+            const preCustomTotal = currentActiveCart.reduce((sum, item) => {
+                const activeCustomer = customers.find(c => c.id === currentActiveCustomerId);
                 const priceType = activeCustomer?.priceType || "special";
                 let bp = item.price;
                 const isFlex = item.name?.toLowerCase() === "otro" || item.isPriceFlexible;
-                if (activeCustomerId && !isFlex) {
+                if (currentActiveCustomerId && !isFlex) {
                     if (priceType === "wholesale" && item.wholesalePrice) bp = item.wholesalePrice;
                     else if (priceType === "special" && item.specialPrice) bp = item.specialPrice;
                     else if (priceType === "general") bp = item.price;
@@ -423,13 +439,13 @@ function App() {
                 payments: paymentsArray,
                 notes: finalNotes || "",
                 total: finalTotal,
-                items: activeCart.map(item => {
-                    const activeCustomer = customers.find(c => c.id === activeCustomerId);
+                items: currentActiveCart.map(item => {
+                    const activeCustomer = customers.find(c => c.id === currentActiveCustomerId);
                     const priceType = activeCustomer?.priceType || "special";
                     let basePrice = item.price;
                     const isFlexible = item.name?.toLowerCase() === "otro" || item.isPriceFlexible;
 
-                    if (activeCustomerId && !isFlexible) {
+                    if (currentActiveCustomerId && !isFlexible) {
                         if (priceType === "wholesale" && item.wholesalePrice) {
                             basePrice = item.wholesalePrice;
                         } else if (priceType === "special" && item.specialPrice) {
@@ -471,7 +487,7 @@ function App() {
             });
 
             // Update product quantities in the same batch
-            activeCart.forEach(item => {
+            currentActiveCart.forEach(item => {
                 const prodRef = doc(db, colName("products"), item.id);
                 const currentQty = products.find(p => p.id === item.id)?.quantity || 0;
                 batch.update(prodRef, {
@@ -479,31 +495,24 @@ function App() {
                 });
             });
 
-            await batch.commit();
+            // OPTIMISTIC CLEANUP: Clear UI before commit blocks
+            setTables(prev => ({ ...prev, [currentActiveTable]: [] }));
+            setSelectedCustomerIdByTable(prev => ({ ...prev, [currentActiveTable]: "" }));
+            setOrderNotesByTable(prev => ({ ...prev, [currentActiveTable]: "" }));
+            setCustomTotalsByTable(prev => ({ ...prev, [currentActiveTable]: null }));
+            setIsProcessing(false); // Hide loading early
 
-            // Limpieza inmediata de la interfaz
-            setTables(prev => ({
-                ...prev,
-                [activeTable]: []
-            }));
-            setSelectedCustomerIdByTable(prev => ({
-                ...prev,
-                [activeTable]: ""
-            }));
-            setOrderNotesByTable(prev => ({
-                ...prev,
-                [activeTable]: ""
-            }));
-            setCustomTotalsByTable(prev => ({
-                ...prev,
-                [activeTable]: null
-            }));
+            showToast(`Compra procesada por ${vendedorName}${!isOnline ? ' (Guardado localmente)' : ''}`, "success");
 
-            showToast(`Compra procesada por ${vendedorName}`, "success");
+            // Execute commit without blocking UI
+            batch.commit().catch(err => {
+                console.error("Firestore commit failed:", err);
+                showToast("Error al sincronizar con el servidor. Se guardó localmente.", "warning");
+            });
+
         } catch (err) {
             console.error("Error local al procesar compra:", err);
             showToast("Error al procesar la compra", "error");
-        } finally {
             setIsProcessing(false);
         }
     };
@@ -515,21 +524,22 @@ function App() {
         }
 
         const tableToClear = activeTable; // Capturar la mesa actual para asegurar que se limpie la correcta
+        const currentActiveCart = [...(tables[tableToClear] || [])];
+        const currentActiveCustomerId = activeCustomerId;
+
+        if (currentActiveCart.length === 0) {
+            showToast("El carrito está vacío", "warning");
+            return;
+        }
+
         setIsProcessing(true);
 
         try {
-            const customerId = activeCustomerId;
             const batch = writeBatch(db);
 
-            const activeCart = tables[tableToClear] || [];
-            if (activeCart.length === 0) {
-                showToast("El carrito está vacío", "warning");
-                return;
-            }
-
             // 1. Preparar los items para ESTA transacción específica
-            const transactionItems = activeCart.map(item => {
-                const activeCustomer = customers.find(c => c.id === customerId);
+            const transactionItems = currentActiveCart.map(item => {
+                const activeCustomer = customers.find(c => c.id === currentActiveCustomerId);
                 const priceType = activeCustomer?.priceType || "special";
                 let basePrice = item.price;
                 const isFlexible = item.name?.toLowerCase() === "otro" || item.isPriceFlexible;
@@ -568,22 +578,22 @@ function App() {
                 };
             });
 
-            // 2. Siempre crear un NUEVO documento de transacción de crédito (en lugar de buscar uno existente)
+            // 2. Siempre crear un NUEVO documento de transacción de crédito
             const loanRef = doc(collection(db, colName("loans")));
             batch.set(loanRef, {
-                customerId,
+                customerId: currentActiveCustomerId,
                 customerName,
                 vendedorName,
                 items: transactionItems,
                 notes: notes || "",
-                date: new Date(), // Fecha de la transacción para agrupación
+                date: new Date(),
                 createdAt: new Date(),
                 lastUpdated: new Date(),
                 status: "pending"
             });
 
-            // 3. Actualizar cantidades de productos (descontar de inventario)
-            activeCart.forEach(item => {
+            // 3. Actualizar cantidades de productos
+            currentActiveCart.forEach(item => {
                 const prodRef = doc(db, colName("products"), item.id);
                 const currentQty = products.find(p => p.id === item.id)?.quantity || 0;
                 batch.update(prodRef, {
@@ -591,19 +601,24 @@ function App() {
                 });
             });
 
-            await batch.commit();
-
-            // 4. Limpiar estado de la interfaz de la mesa capturada
+            // OPTIMISTIC CLEANUP
             setTables(prev => ({ ...prev, [tableToClear]: [] }));
             setSelectedCustomerIdByTable(prev => ({ ...prev, [tableToClear]: "" }));
             setOrderNotesByTable(prev => ({ ...prev, [tableToClear]: "" }));
             setCustomTotalsByTable(prev => ({ ...prev, [tableToClear]: null }));
+            setIsProcessing(false);
 
-            showToast(`Crédito registrado para ${customerName}`, "success");
+            showToast(`Crédito registrado para ${customerName}${!isOnline ? ' (Guardado localmente)' : ''}`, "success");
+
+            // Execute commit in background
+            batch.commit().catch(err => {
+                console.error("Firestore commit failed (loan):", err);
+                showToast("Error al sincronizar crédito. Se guardó localmente.", "warning");
+            });
+
         } catch (err) {
             console.error("Error al guardar crédito:", err);
             showToast("Error al guardar el crédito", "error");
-        } finally {
             setIsProcessing(false);
         }
     };
@@ -612,7 +627,10 @@ function App() {
         setIsProcessing(true);
         try {
             const loan = loans.find(l => l.id === loanId);
-            if (!loan) return;
+            if (!loan) {
+                setIsProcessing(false);
+                return;
+            }
 
             const paymentsArray = Array.isArray(paymentsOrMethod)
                 ? paymentsOrMethod
@@ -656,20 +674,27 @@ function App() {
 
             if (remainingItems.length === 0) {
                 batch.delete(loanRef);
-                showToast(`Deuda de ${loan.customerName} saldada totalmente`, "success");
+                showToast(`Deuda de ${loan.customerName} saldada totalmente${!isOnline ? ' (Local)' : ''}`, "success");
             } else {
                 batch.update(loanRef, {
                     items: remainingItems,
                     lastUpdated: new Date()
                 });
-                showToast("Pago de productos registrado", "success");
+                showToast(`Pago de productos registrado${!isOnline ? ' (Local)' : ''}`, "success");
             }
 
-            await batch.commit();
+            // OPTIMISTIC: Hide loading early
+            setIsProcessing(false);
+
+            // Execute commit in background
+            batch.commit().catch(err => {
+                console.error("Firestore commit failed (loan payment):", err);
+                showToast("Error al sincronizar el pago. Se guardó localmente.", "warning");
+            });
+
         } catch (err) {
             console.error(err);
             showToast("Error al procesar el pago", "error");
-        } finally {
             setIsProcessing(false);
         }
     };
@@ -686,13 +711,13 @@ function App() {
             const remainingItems = (loan.items || []).filter(item => item.id !== productId);
 
             if (remainingItems.length === 0) {
-                await deleteDoc(loanRef);
+                deleteDoc(loanRef).catch(err => console.error("Error deleting empty loan:", err));
                 showToast("Crédito eliminado por estar vacío", "success");
             } else {
-                await updateDoc(loanRef, {
+                updateDoc(loanRef, {
                     items: remainingItems,
                     lastUpdated: new Date()
-                });
+                }).catch(err => console.error("Error updating loan items:", err));
                 showToast("Producto eliminado del crédito", "success");
             }
         } catch (err) {
@@ -910,12 +935,18 @@ function App() {
                 });
 
                 batch.update(logRef, mergedData);
-                await batch.commit();
+                batch.commit().catch(err => {
+                    console.error("Error committing performance update:", err);
+                    showToast("Error de sincronización en rendimiento", "warning");
+                });
                 showToast("Cierre diario actualizado y unido", "success");
             } else {
-                await addDoc(collection(db, colName("dailyPerformance")), {
+                addDoc(collection(db, colName("dailyPerformance")), {
                     ...data,
                     date: new Date()
+                }).catch(err => {
+                    console.error("Error adding performance:", err);
+                    showToast("Error al guardar rendimiento", "error");
                 });
                 showToast("Rendimiento diario guardado", "success");
             }
@@ -971,7 +1002,7 @@ function App() {
             performanceLogs.forEach((log) => {
                 batch.delete(doc(db, colName("dailyPerformance"), log.id));
             });
-            await batch.commit();
+            batch.commit().catch(err => console.error("Error reset performance:", err));
             showToast("Historial de rendimiento eliminado", "success");
         } catch (err) {
             showToast("Error al eliminar historial de rendimiento", "error");
@@ -1061,7 +1092,10 @@ function App() {
                 }
             }
 
-            await batch.commit();
+            batch.commit().catch(err => {
+                console.error("Firestore commit failed (update history):", err);
+                showToast("Error al sincronizar actualización. Se guardó localmente.", "warning");
+            });
             showToast(newItems.length === 0 ? "Transacción eliminada" : "Transacción actualizada", "success");
         } catch (err) {
             console.error("Error updating transaction history:", err);
@@ -1132,7 +1166,25 @@ function App() {
                 <div className="header-top" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                         <img src="logo.png" alt="Hemma Logo" style={{ height: '40px', objectFit: 'contain' }} />
-                        <h1 style={{ margin: 0, fontSize: "1.8rem" }}>HEMMA</h1>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
+                            <h1 style={{ margin: 0, fontSize: "1.8rem" }}>HEMMA</h1>
+                            {!isOnline && (
+                                <span style={{ 
+                                    background: "#f44336", 
+                                    color: "white", 
+                                    padding: "0.2rem 0.6rem", 
+                                    borderRadius: "6px", 
+                                    fontSize: "0.75rem", 
+                                    fontWeight: "bold",
+                                    display: "flex", 
+                                    alignItems: "center", 
+                                    gap: "0.4rem",
+                                    boxShadow: "0 2px 4px rgba(0,0,0,0.1)"
+                                }}>
+                                    <SafeEmoji emoji="📶" /> SIN CONEXIÓN
+                                </span>
+                            )}
+                        </div>
                         {currentMode === "demo" && (
                             <span style={{ background: "#ff9800", color: "white", padding: "0.2rem 0.6rem", borderRadius: "4px", fontSize: "0.7rem", fontWeight: "bold" }}>MODO DEMO</span>
                         )}

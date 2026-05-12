@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import packageJson from "../../package.json";
 import SafeEmoji from "./SafeEmoji";
 import { isEmojiSupported } from "../utils/emojiSupport";
 import ExcelJS from "exceljs/dist/exceljs.min.js";
@@ -410,7 +411,7 @@ function Ajustes({
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
                         <div>
                             <div style={{ fontWeight: "700", color: "#4527a0", fontSize: "1rem" }}>Estado del Sistema</div>
-                            <div style={{ fontSize: "0.85rem", color: "#666" }}>Versión actual: 1.2.0</div>
+                            <div style={{ fontSize: "0.85rem", color: "#666" }}>Versión actual: {packageJson.version}</div>
                         </div>
                         <button
                             onClick={handleCheckUpdates}
