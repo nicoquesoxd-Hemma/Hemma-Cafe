@@ -142,18 +142,45 @@ function DailyPerformance({ transactions, logs, onSave, onViewDetails, onDeleteL
             const workbook = new ExcelJS.Workbook();
             const worksheet = workbook.addWorksheet("Historial de Rendimiento");
 
+            const uniqueMethods = new Set();
+            if (paymentMethods && Array.isArray(paymentMethods)) {
+                paymentMethods.forEach(pm => {
+                    if (pm.name) uniqueMethods.add(pm.name);
+                });
+            }
+            logs.forEach(log => {
+                if (log.perMethodStats) {
+                    Object.keys(log.perMethodStats).forEach(m => uniqueMethods.add(m));
+                }
+                if (log.paymentMethodTotals) {
+                    Object.keys(log.paymentMethodTotals).forEach(m => uniqueMethods.add(m));
+                }
+                if (log.paymentMethod) {
+                    uniqueMethods.add(log.paymentMethod);
+                }
+            });
+            uniqueMethods.delete("Desconocido");
+            const methodsList = Array.from(uniqueMethods);
+
+            const dynamicCols = methodsList.map(method => ({
+                header: method,
+                key: `method_${method}`,
+                width: 15
+            }));
+
             worksheet.columns = [
                 { header: "Fecha", key: "date", width: 15 },
                 { header: "Productos", key: "products", width: 10 },
                 { header: "Esperado", key: "expected", width: 15 },
                 { header: "Real", key: "real", width: 15 },
                 { header: "Diferencia", key: "diff", width: 15 },
+                ...dynamicCols,
                 { header: "Metodo Dif.", key: "diffMethod", width: 15 },
                 { header: "Notas", key: "notes", width: 30 }
             ];
 
             logs.forEach(log => {
-                worksheet.addRow({
+                const rowData = {
                     date: new Date(log.date).toLocaleDateString(),
                     products: log.productsSold || 0,
                     expected: log.expectedTotal || 0,
@@ -161,7 +188,21 @@ function DailyPerformance({ transactions, logs, onSave, onViewDetails, onDeleteL
                     diff: log.difference || 0,
                     diffMethod: log.diffMethod || "-",
                     notes: log.notes || ""
+                };
+
+                methodsList.forEach(method => {
+                    let val = 0;
+                    if (log.perMethodStats && log.perMethodStats[method] !== undefined) {
+                        val = log.perMethodStats[method].real || 0;
+                    } else if (log.paymentMethodTotals && log.paymentMethodTotals[method] !== undefined) {
+                        val = log.paymentMethodTotals[method] || 0;
+                    } else if (log.paymentMethod === method) {
+                        val = log.realTotal || log.expectedTotal || 0;
+                    }
+                    rowData[`method_${method}`] = val;
                 });
+
+                worksheet.addRow(rowData);
             });
 
             // Style headers
@@ -171,6 +212,16 @@ function DailyPerformance({ transactions, logs, onSave, onViewDetails, onDeleteL
                 pattern: 'solid',
                 fgColor: { argb: 'FFE3F2FD' }
             };
+
+            // Format numbers
+            const currencyColIndexes = [3, 4, 5];
+            for (let i = 0; i < methodsList.length; i++) {
+                currencyColIndexes.push(6 + i);
+            }
+
+            currencyColIndexes.forEach(idx => {
+                worksheet.getColumn(idx).numFmt = '"$"#,##0';
+            });
 
             const buffer = await workbook.xlsx.writeBuffer();
             saveAs(new Blob([buffer]), `Historial_Rendimiento_${new Date().toISOString().split('T')[0]}.xlsx`);

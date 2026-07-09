@@ -144,7 +144,8 @@ function SalesHistory({ transactions, vendedores, products, categories, initialF
             { header: "Descuento Item", key: "descuentoItem", width: 15 },
             { header: "Precio Final (Subt.)", key: "precioFinalSubt", width: 18 },
             { header: "Total Transacción", key: "totalTrans", width: 18 },
-            { header: "Método de Pago", key: "metodoPago", width: 18 },
+            { header: "Método de Pago 1", key: "metodoPago", width: 18 },
+            { header: "Método de Pago 2", key: "metodoPago2", width: 18 },
             { header: "Notas", key: "notas", width: 30 },
         ];
 
@@ -174,7 +175,8 @@ function SalesHistory({ transactions, vendedores, products, categories, initialF
                     descuentoItem: item.discount !== undefined ? item.discount : 0,
                     precioFinalSubt: item.subtotal !== undefined ? item.subtotal : (item.price * (item.cartQuantity || 1)),
                     totalTrans: t.total,
-                    metodoPago: t.paymentMethod || "Efectivo",
+                    metodoPago: t.payments && t.payments.length > 0 ? t.payments[0].method : (t.paymentMethod || "Efectivo"),
+                    metodoPago2: t.payments && t.payments.length > 1 ? t.payments[1].method : "",
                     notas: idx === 0 ? (t.notes || "") : "",
                 });
             });
