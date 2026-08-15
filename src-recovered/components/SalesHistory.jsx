@@ -360,12 +360,7 @@ function SalesHistory({ transactions, vendedores, products, categories, initialF
                                 style={{ width: "100%", padding: "0.6rem", borderRadius: "8px", border: "1px solid #ccc" }}
                             >
                                 <option value="">Todos los métodos</option>
-                                <option value="Efectivo">Efectivo</option>
-                                <option value="Tarjeta">Tarjeta</option>
-                                <option value="Bre-B">Bre-B</option>
-                                <option value="Nequi">Nequi</option>
-                                <option value="Daviplata">Daviplata</option>
-                                <option value="Servicio">Servicio</option>
+                                {paymentMethods.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
                             </select>
                         </div>
 
