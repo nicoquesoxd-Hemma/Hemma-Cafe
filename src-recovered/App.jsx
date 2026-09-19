@@ -1337,6 +1337,7 @@ function App() {
                                                 selectedCustomerId={activeCustomerId}
                                                 customerPriceType={activeCustomerPriceType}
                                                 onAddToCart={handleAddToCart}
+                                                cartItems={activeCart}
                                                 salesCount={salesCount}
                                                 layoutMode={isUltraMobile ? "list" : "grid"}
                                             />

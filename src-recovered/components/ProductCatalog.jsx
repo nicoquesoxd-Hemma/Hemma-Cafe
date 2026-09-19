@@ -10,7 +10,7 @@ const formatCurrency = (amount) => {
     }).format(amount);
 };
 
-function ProductCatalog({ products, categories, selectedCustomerId, customerPriceType = "special", onAddToCart, salesCount = {}, layoutMode = "grid" }) {
+function ProductCatalog({ products, categories, selectedCustomerId, customerPriceType = "special", onAddToCart, cartItems = [], salesCount = {}, layoutMode = "grid" }) {
     const [searchQuery, setSearchQuery] = useState("");
     const [categoryFilter, setCategoryFilter] = useState("");
     const [sortBy, setSortBy] = useState("mostSold");
@@ -228,10 +228,12 @@ function ProductCatalog({ products, categories, selectedCustomerId, customerPric
                                 }
                             }
 
+                            const isInCart = cartItems.some(item => item.id === product.id);
+
                             return (
                                 <div
                                     onClick={() => {
-                                        if (isOutOfStock) return;
+                                        if (isOutOfStock || isInCart) return;
                                         if (product.name.toLowerCase() === "otro" || product.isPriceFlexible) {
                                             setPendingProduct(product);
                                             setIsPriceModalOpen(true);
@@ -246,9 +248,10 @@ function ProductCatalog({ products, categories, selectedCustomerId, customerPric
                                         flexDirection: "column",
                                         justifyContent: "space-between",
                                         opacity: isOutOfStock ? 0.6 : 1,
-                                        cursor: isOutOfStock ? "not-allowed" : "pointer",
+                                        cursor: isOutOfStock ? "not-allowed" : isInCart ? "default" : "pointer",
                                         position: "relative",
                                         overflow: "hidden",
+                                        outline: isInCart ? "2px solid #4CAF50" : "none",
                                     }}
                                 >
                                     {isOutOfStock && (
@@ -267,6 +270,24 @@ function ProductCatalog({ products, categories, selectedCustomerId, customerPric
                                             }}
                                         >
                                             AGOTADO
+                                        </div>
+                                    )}
+                                    {isInCart && !isOutOfStock && (
+                                        <div
+                                            style={{
+                                                position: "absolute",
+                                                top: "0.5rem",
+                                                right: "0.5rem",
+                                                background: "#4CAF50",
+                                                color: "white",
+                                                padding: "0.15rem 0.5rem",
+                                                borderRadius: "20px",
+                                                fontSize: "0.7rem",
+                                                fontWeight: "bold",
+                                                zIndex: 2,
+                                            }}
+                                        >
+                                            ✓ En caja
                                         </div>
                                     )}
                                     {product.image && (
@@ -358,6 +379,7 @@ function ProductCatalog({ products, categories, selectedCustomerId, customerPric
                             {filteredProducts.map(product => {
                                 const isFlexible = product.name?.toLowerCase() === "otro" || product.isPriceFlexible;
                                 const isOut = product.quantity <= 0;
+                                const isInCartList = cartItems.some(item => item.id === product.id);
                                 let currentPrice = product.price;
                                 if (selectedCustomerId && !isFlexible) {
                                     if (customerPriceType === "wholesale" && product.wholesalePrice) currentPrice = product.wholesalePrice;
@@ -367,28 +389,37 @@ function ProductCatalog({ products, categories, selectedCustomerId, customerPric
                                 return (
                                     <div 
                                         key={product.id}
-                                        onClick={() => !isOut && (isFlexible ? (setPendingProduct(product), setIsPriceModalOpen(true)) : onAddToCart(product))}
+                                        onClick={() => {
+                                            if (isOut || isInCartList) return;
+                                            if (isFlexible) { setPendingProduct(product); setIsPriceModalOpen(true); }
+                                            else { onAddToCart(product); }
+                                        }}
                                         style={{ 
                                             display: "flex", alignItems: "center", gap: "0.8rem", padding: "0.7rem", 
-                                            background: isOut ? "#f8f8f8" : "white", border: "1px solid #eee", borderRadius: "10px",
-                                            cursor: isOut ? "not-allowed" : "pointer", opacity: isOut ? 0.6 : 1, transition: "all 0.2s"
+                                            background: isInCartList ? "#f0fdf4" : isOut ? "#f8f8f8" : "white",
+                                            border: isInCartList ? "1.5px solid #4CAF50" : "1px solid #eee",
+                                            borderRadius: "10px",
+                                            cursor: isOut || isInCartList ? "default" : "pointer",
+                                            opacity: isOut ? 0.6 : 1, transition: "all 0.2s"
                                         }}
-                                        className="list-item-hover"
+                                        className={isInCartList ? "" : "list-item-hover"}
                                     >
                                         <div style={{ width: "45px", height: "45px", borderRadius: "8px", background: "#f0f0f0", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0 }}>
                                             {product.image ? <img src={product.image} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <span style={{ fontSize: "1.4rem" }}>📦</span>}
                                         </div>
                                         <div style={{ flex: 1, minWidth: 0 }}>
-                                            <div style={{ fontWeight: "bold", fontSize: "1rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", color: "#333" }}>{product.name}</div>
+                                            <div style={{ fontWeight: "bold", fontSize: "1rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", color: isInCartList ? "#2e7d32" : "#333" }}>{product.name}</div>
                                             <div style={{ fontSize: "0.75rem", color: "#777" }}>
                                                 {categories.find(c => c.id === product.categoryId)?.name || "General"} • {product.quantity} disp.
                                             </div>
                                         </div>
                                         <div style={{ textAlign: "right", paddingRight: "0.5rem" }}>
-                                            <div style={{ fontWeight: "bold", color: "var(--color-primary)", fontSize: "1rem" }}>{formatCurrency(currentPrice)}</div>
-                                            <div style={{ fontSize: "0.65rem", color: "#999", fontWeight: "600" }}>Tocar para add.</div>
+                                            <div style={{ fontWeight: "bold", color: isInCartList ? "#4CAF50" : "var(--color-primary)", fontSize: "1rem" }}>{formatCurrency(currentPrice)}</div>
+                                            <div style={{ fontSize: "0.65rem", color: isInCartList ? "#4CAF50" : "#999", fontWeight: "600" }}>{isInCartList ? "✓ En caja" : "Tocar para add."}</div>
                                         </div>
-                                        <div style={{ background: "var(--color-primary)", color: "white", width: "28px", height: "28px", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "bold", fontSize: "1.2rem", flexShrink: 0 }}>+</div>
+                                        <div style={{ background: isInCartList ? "#4CAF50" : "var(--color-primary)", color: "white", width: "28px", height: "28px", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "bold", fontSize: "1.2rem", flexShrink: 0 }}>
+                                            {isInCartList ? "✓" : "+"}
+                                        </div>
                                     </div>
                                 );
                             })}
